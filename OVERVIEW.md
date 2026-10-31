@@ -1,4 +1,4 @@
-Shows ccstatusline information beside each agent’s composer in Paseo 0.14.0 or later. The pill displays context, 5-hour usage and weekly usage, with `--` for missing values. Hover shows the configured rows; the popover adds colored, wrapping segments and the agent title.
+Shows ccstatusline information beside each agent’s composer in Paseo 0.14.0 or later. The pill displays context, 5-hour usage and weekly usage, with `--` for missing values. Hover shows the configured rows; the popover adds colored rows that scroll sideways together and the agent title.
 
 Reads the daemon’s `~/.config/ccstatusline/settings.json`, or `CCSTATUSLINE_SETTINGS_PATH` when configured. Saved settings refresh every 30 seconds and while the popover is open. It uses agent records, provider model catalogs and provider usage reports, plus daemon-side Git branch, memory and Claude output-style settings. It reads the recent Claude timeline only while the popover is open to identify the last explicit skill call. Codex skill detection is unavailable.
 
