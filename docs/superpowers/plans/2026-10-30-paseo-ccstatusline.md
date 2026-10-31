@@ -92,7 +92,7 @@ Report the SHA, the commands, the three results and any conflict with the spec.
 **Interfaces:**
 - Produces:
   - `parseSettings(raw: unknown): StatusSettings`, which throws `SettingsError` with a reason.
-  - `type StatusSettings = { lines: WidgetConfig[][]; colorLevel: number; globalBold: boolean; powerline: { enabled: boolean; theme: string; continueThemeAcrossLines: boolean } }`
+  - `type StatusSettings = { lines: WidgetConfig[][]; colorLevel: number; globalBold: boolean; powerline: { enabled: boolean; theme?: string; continueThemeAcrossLines: boolean } }`
   - `type WidgetConfig = { id: string; type: string; color?: string; backgroundColor?: string; rawValue?: boolean }`
   - `themeColors(settings: StatusSettings, slot: number): { fg: string; bg: string }` in `shared/themes.ts`, which returns hex values.
   - `toHex(color: string, colorLevel?: number): string | null` in `shared/colors.ts` for named, `ansi256:` and `hex:` colors.

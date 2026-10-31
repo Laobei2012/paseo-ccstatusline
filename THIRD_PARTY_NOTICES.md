@@ -2,8 +2,9 @@
 
 ## ccstatusline 2.2.33
 
-The built-in Powerline theme table in `shared/themes.ts` and named color values
-in `shared/colors.ts` come from ccstatusline 2.2.33:
+The built-in Powerline theme table in `shared/themes.ts`, named color values
+in `shared/colors.ts`, and default formatting adapted in `shared/widgets.ts`
+come from ccstatusline 2.2.33:
 https://github.com/sirmalloc/ccstatusline
 
 MIT License
