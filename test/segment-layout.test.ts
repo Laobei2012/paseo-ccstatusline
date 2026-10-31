@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { segmentRowStyle, segmentOuterStyle, SegmentRow } from "../client/segment-row";
 import type { Segment } from "../shared/widgets";
 
-vi.mock("react-native", () => ({ Text: "Text", View: "View" }));
+vi.mock("react-native", () => ({ Text: "Text", View: "View", Platform: { OS: "web" } }));
 
 it("wraps rows and constrains each segment inside the popover", () => {
   expect(segmentRowStyle()).toMatchObject({ flexDirection: "row", flexWrap: "wrap", maxWidth: "100%", paddingRight: 6 });

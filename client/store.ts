@@ -57,6 +57,7 @@ export function createStatusStore(deps: Dependencies): StatusStore {
   let usageGeneration = 0;
   let usagePending = false;
   let notification: ReturnType<typeof setTimeout> | null = null;
+  let speedExpiry: ReturnType<typeof setTimeout> | null = null;
   let membershipChanged = false;
   let stopped = false;
 
@@ -72,7 +73,8 @@ export function createStatusStore(deps: Dependencies): StatusStore {
       contextMax: agent.lastUsage?.contextWindowMaxTokens ?? null,
       branch: remote?.branch ?? null, cwd: agent.cwd, memory: remote?.memory ?? null,
       tokens: { cached: agent.lastUsage?.cachedInputTokens ?? null, input: agent.lastUsage?.inputTokens ?? null, output: agent.lastUsage?.outputTokens ?? null },
-      speed, usageAccount: selected.account, session: selected.session, weekly: selected.weekly,
+      speed: state.sample && deps.now() - state.sample.atMs <= 10000 ? speed : { input: null, output: null, total: null },
+      usageAccount: selected.account, session: selected.session, weekly: selected.weekly,
       thinking: agent.runtimeInfo?.thinkingOptionId ?? agent.thinkingOptionId ?? null,
       skill: skills.get(agent.id)?.provider === agent.provider && deps.now() - skills.get(agent.id)!.at < 300000 ? skills.get(agent.id)!.label : null,
       outputStyle: agent.provider === "claude" ? remote?.outputStyle ?? null : null,
@@ -96,6 +98,13 @@ export function createStatusStore(deps: Dependencies): StatusStore {
         changed = true;
       }
       if (changed) for (const listener of listeners) listener();
+      if (speedExpiry !== null) { clearTimeout(speedExpiry); speedExpiry = null; }
+      let expiresAt = Infinity;
+      for (const state of agents.values()) {
+        const deadline = (state.sample?.atMs ?? -Infinity) + 10001;
+        if (deadline > deps.now() && Object.values(state.speed).some((value) => value !== null)) expiresAt = Math.min(expiresAt, deadline);
+      }
+      if (Number.isFinite(expiresAt)) speedExpiry = setTimeout(schedule, expiresAt - deps.now());
     }, 1000);
   }
 
@@ -290,6 +299,7 @@ export function createStatusStore(deps: Dependencies): StatusStore {
       if (stopped) return;
       stopped = true;
       if (notification !== null) clearTimeout(notification);
+      if (speedExpiry !== null) clearTimeout(speedExpiry);
       if (usageTimer !== null) clearInterval(usageTimer);
       if (settingsTimer !== null) clearInterval(settingsTimer);
       for (const directory of directories.values()) if (directory.timer !== null) clearInterval(directory.timer);
