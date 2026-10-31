@@ -53,7 +53,7 @@ The plugin registers one pill with `client.addComposerPill` for each non-archive
 
 The label is `74% · 63% · 39%`, in this fixed order: context, 5-hour usage, weekly usage. Simon chose three numbers without labels. If a number is missing, show `--` in its position so that the order does not change. Round each number to a whole percent.
 
-The custom icon draws a small horizontal bar that shows context use.
+The custom icon draws a small horizontal bar that shows context use. Draw to the `size` prop, because composer pills pass 14. The icon reads its value by `agentId` from a plugin store.
 
 The pill behavior is `popover`.
 
@@ -61,7 +61,7 @@ The pill behavior is `popover`.
 
 The `title` holds one plain text row for each configured line. Segments in a row are separated by ` | `. The rows use the same hidden-widget rules as the popover.
 
-The Paseo tooltip was not tested with several rows. Test this first. If the rows are unreadable in the real tooltip, set `title` to `Context, 5-hour usage, weekly usage` and record the result in the final report.
+The Paseo tooltip was not tested with several rows. The first implementation task tests this before other work starts. If the rows are unreadable in the real tooltip, set `title` to `Context, 5-hour usage, weekly usage` and record the result in the final report.
 
 ### Popover
 
@@ -69,15 +69,15 @@ The popover shows the agent title and then one row for each configured line. Eac
 
 ### Configuration
 
-A server RPC reads the configuration file on the daemon machine, parses it with Zod, and returns the fields that the client needs: `lines`, each widget `type`, `color`, `backgroundColor` and `rawValue` where present, plus `colorLevel`, `globalBold`, and `powerline`. Unknown fields are ignored. The RPC checks the file modification time on each call, so a saved change appears without a plugin reload.
+A server RPC reads the configuration file on the daemon machine, parses it with Zod, and returns the fields that the client needs: `lines`, each widget `type`, `color`, `backgroundColor` and `rawValue` where present, plus `colorLevel`, `globalBold`, and `powerline`. Unknown fields, including `merge`, are ignored. The RPC checks the file modification time on each call, so a saved change appears without a plugin reload.
 
 If the file is missing or invalid, the pill still shows its three numbers. The popover shows a one-line message with the path and the reason.
 
-Colors follow `ccstatusline` 2.2.33. When `powerline.enabled` is true and a built-in theme is selected, segments take their colors from that theme, not from the widget `color` fields. `colorLevel` selects the theme variant. The color sequence restarts on each line because `continueThemeAcrossLines` is false in Simon's file. If that field is true, continue the sequence across lines.
+Colors follow `ccstatusline` 2.2.33. When `powerline.enabled` is true and a built-in theme is selected, segments take their colors from that theme, not from the widget `color` fields. `colorLevel` selects the theme variant. The color sequence restarts on each line because `continueThemeAcrossLines` is false in Simon's file. If that field is true, continue the sequence across lines. A hidden widget does not use a color slot, so later segments move up in the sequence.
 
 Copy the built-in theme table from `ccstatusline` 2.2.33 and include its MIT license notice. Convert named colors, `ansi256:` colors and `hex:` colors to hex for React Native. When Powerline is off, use the widget colors and a plain separator.
 
-With Simon's file, Claude output must match this:
+With Simon's file, a Claude agent with all values present has this layout. The numbers are an example from one `ccstatusline` run, and the token numbers will differ. See the token rules.
 
 ```text
 Model: Opus 5.5 > Context: [████████████░░░░] 147k/200k (74%) > ⎇ main
@@ -105,7 +105,7 @@ Support the 18 widget types in Simon's file. Any other type is hidden, and the p
 
 | Widget | Source | Provider notes |
 | --- | --- | --- |
-| `model` | agent `runtimeInfo.model`, then `model` | All |
+| `model` | Model label from the provider model list, then the raw model ID | All |
 | `context-bar` | `lastUsage.contextWindowUsedTokens` and `contextWindowMaxTokens` | A missing value hides it |
 | `git-branch` | server RPC, `git branch --show-current` in the agent `cwd` | Hidden outside Git |
 | `current-working-dir` | agent `cwd` | All |
@@ -124,11 +124,13 @@ Support the 18 widget types in Simon's file. Any other type is hidden, and the p
 | `skills` | last skill use in the agent timeline | See skills rules |
 | `output-style` | Claude Code configuration file | Claude agents only |
 
-Speed rules: Paseo has no speed field. Keep the last token counts and time for each agent in the client. While the agent is running and the counts increase, speed is the token increase divided by the elapsed time. If a count decreases or no earlier sample exists, hide the speed. Speed text is italic in the popover because it is an estimate.
+Token rules: `ccstatusline` shows session totals, but Paseo `lastUsage` holds values from the last provider report, usually the last turn. The token widgets show the `lastUsage` values, with the same labels. The plugin does not sum them, because the source of each value differs between providers.
 
-Usage rules: call `paseo.providers.listUsage()`, and select the report that matches the agent provider. Read the real reports for Claude and Codex first. Then identify the 5-hour window and the weekly window from the window `id`, `shortLabel` or `label`. A provider with no match has hidden usage widgets and `--` in the pill. If a provider has more than one account report, use `--` and hidden widgets, because the agent account is unknown through this API. Simon has the ZeroSub plugin, so this case is real. Refresh usage at most once each 60 seconds, and share one result among all pills.
+Speed rules: Paseo has no speed field. Keep the last token counts and time for each agent in the client. While the agent is running and the counts increase, speed is the token increase divided by the elapsed time. If a count decreases or no earlier sample exists, hide the speed. Paseo updates usage rarely during a turn, so speed is best effort and it is often hidden. Speed text is italic in the popover because it is an estimate.
 
-Skills rules: read only the agent's recent timeline, only while its popover is open. Show the last skill that the timeline identifies. If a provider does not identify skill use in a reliable way, hide this widget. If a skill value is already known, the hover text includes it. Do not use `agent.commands()` for this widget, because it lists loaded skills and not used skills.
+Usage rules: call `paseo.providers.listUsage()`, and select the report with a `providerId` that matches the agent provider. The first implementation task records the real report shape for Claude, Codex and ZeroSub. Read the real reports for Claude and Codex first. Then identify the 5-hour window and the weekly window from the window `id`, `shortLabel` or `label`. A provider with no match has hidden usage widgets and `--` in the pill. If a provider has more than one report, use `--` and hidden widgets, because the agent account is unknown through this API. Simon has the ZeroSub plugin, so this case is real. If the first task shows that one report can describe a different account than the agent uses, stop and ask Simon before the usage widgets are built. Refresh usage at most once each 60 seconds, and share one result among all pills.
+
+Skills rules: the protocol has no skill timeline item. The first implementation task looks for a reliable tool-call shape for skill use in Claude and Codex timelines. Read only the agent's recent timeline, only while its popover is open. Show the last skill that the timeline identifies. If a provider has no reliable shape, hide this widget for that provider. If a skill value is already known, the hover text includes it. Do not use `agent.commands()` for this widget, because it lists loaded skills and not used skills.
 
 Output style rules: for agents with the `claude` provider only, a server RPC reads `outputStyle` with this order: `<cwd>/.claude/settings.local.json`, `<cwd>/.claude/settings.json`, then the user settings at `$CLAUDE_CONFIG_DIR/settings.json` or `~/.claude/settings.json`. Read no other fields. Show the text after the last `:`. This is the configured value, and a running agent can differ.
 
@@ -169,3 +171,5 @@ Each item is required before the final report:
 - Accounts: more than one account report for a provider gives `--`, not a guess.
 - Missing configuration: the pill stays and the popover shows a message.
 - Skills: the widget reads the timeline only while the popover is open.
+- Tokens: the token widgets show last-report values from `lastUsage`, not session totals.
+- Model name: the label comes from the provider model list, with the raw ID as the fallback.
