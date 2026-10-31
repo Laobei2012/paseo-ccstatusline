@@ -29,6 +29,7 @@ describe("last used skill", () => {
       { ...valid, detail: { type: "shell", label: "fake", command: "Skill" } },
       { ...valid, detail: { type: "plain_text", text: "Launching skill: fake" } },
       { ...valid, detail: { type: "plain_text", label: "   " } },
+      { ...skill("failed-skill"), status: "failed", error: "failed" },
     ] as TimelineItem[];
     expect(lastSkill(invalid, "claude")).toBeNull();
     expect(lastSkill([valid, ...invalid], "claude")).toBe("paseo");

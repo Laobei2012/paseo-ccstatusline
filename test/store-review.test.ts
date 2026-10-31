@@ -52,6 +52,15 @@ it("review: unchanged-count upserts preserve the speed measurement interval", as
   expect(store.getView("a")?.title).toBe("Out: 100.0 t/s");
 });
 
+it("review: hides a stalled running agent's speed after ten seconds without changed counts", async () => {
+  setup(); store.setAgents([agent()]); await vi.advanceTimersByTimeAsync(1000);
+  store.upsertAgent({ ...agent(), lastUsage: { inputTokens: 0, outputTokens: 200 } });
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(store.getView("a")?.title).toBe("Out: 100.0 t/s");
+  await vi.advanceTimersByTimeAsync(11000);
+  expect(store.getView("a")?.title).not.toContain("t/s");
+});
+
 it("review: backs off failed model lists for 60 seconds", async () => {
   const deps = setup(); vi.spyOn(console, "error").mockImplementation(() => {});
   deps.listModels.mockRejectedValue(new Error("offline"));

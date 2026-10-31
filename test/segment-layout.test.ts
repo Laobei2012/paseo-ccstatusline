@@ -5,7 +5,7 @@ import type { Segment } from "../shared/widgets";
 vi.mock("react-native", () => ({ Text: "Text", View: "View" }));
 
 it("wraps rows and constrains each segment inside the popover", () => {
-  expect(segmentRowStyle()).toMatchObject({ flexDirection: "row", flexWrap: "wrap", maxWidth: "100%" });
+  expect(segmentRowStyle()).toMatchObject({ flexDirection: "row", flexWrap: "wrap", maxWidth: "100%", paddingRight: 6 });
   expect(segmentOuterStyle()).toMatchObject({ maxWidth: "100%", flexShrink: 1 });
 });
 
@@ -14,7 +14,8 @@ it("renders null backgrounds as transparent and estimates as italic monospace", 
   const row = SegmentRow({ segments: [segment], foreground: "#abcdef", powerline: false, bold: false });
   const outer = row.props.children[0];
   expect(outer.props.style).toMatchObject({ backgroundColor: "transparent", maxWidth: "100%" });
-  expect(outer.props.children[0].props.style).toMatchObject({ color: "#123456", fontFamily: "monospace", fontStyle: "italic", flexShrink: 1 });
+  expect(outer.props.children[0].props.style).toMatchObject({ color: "#123456", fontFamily: "monospace", fontStyle: "italic", flexShrink: 1,
+    minWidth: 0, overflowWrap: "anywhere" });
 });
 
 it("draws a Powerline separator as a View shape and preserves configured colors", () => {
