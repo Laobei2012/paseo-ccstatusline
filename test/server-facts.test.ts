@@ -46,6 +46,7 @@ describe("daemon facts", () => {
     expect(result.memory!.total).toBeGreaterThan(0);
     expect(result.memory!.used).toBeGreaterThanOrEqual(0);
     expect(result.memory!.used).toBeLessThanOrEqual(result.memory!.total);
+    expect(console.error).not.toHaveBeenCalled();
   });
 
   it("prefers project local settings and removes the namespace", async () => {
@@ -59,6 +60,12 @@ describe("daemon facts", () => {
 
   it("uses project settings before user settings", async () => {
     await style(join(config, "settings.json"), "user");
+    await style(join(cwd, ".claude/settings.json"), "project");
+    expect((await readFacts({ cwd, provider: "claude" })).outputStyle).toBe("project");
+  });
+
+  it("falls through an invalid local output style to project settings", async () => {
+    await style(join(cwd, ".claude/settings.local.json"), 42);
     await style(join(cwd, ".claude/settings.json"), "project");
     expect((await readFacts({ cwd, provider: "claude" })).outputStyle).toBe("project");
   });
