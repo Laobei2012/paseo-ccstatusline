@@ -6,6 +6,7 @@
     "paseo-plugin.json",
     "OVERVIEW.md",
     "OVERVIEW.*.md",
+    "THIRD_PARTY_NOTICES.md",
     "index.client.ts",
     "index.client.tsx",
     "index.server.ts",

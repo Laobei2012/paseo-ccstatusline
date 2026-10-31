@@ -37,7 +37,7 @@ export default function contribute(client: PluginClientContext) {
         id: "status", workspaceId: agent.workspaceId!, agentId: agent.id,
         button: { label, title, icon: Icon, behavior: { kind: "popover", Content: StatusContent } },
       });
-      pills.set(agent.id, { workspaceId: agent.workspaceId!, registration, label, title, contextPercent: view?.contextPercent ?? null });
+      pills.set(agent.id, { workspaceId: agent.workspaceId!, registration, label, title });
     }
     for (const [id, pill] of pills) {
       const view = store.getView(id);
@@ -45,7 +45,7 @@ export default function contribute(client: PluginClientContext) {
       const title = view.title || view.settingsError || "Status unavailable";
       if (pill.label === view.label && pill.title === title) continue;
       pill.registration.update({ label: view.label, title });
-      pill.label = view.label; pill.title = title; pill.contextPercent = view.contextPercent;
+      pill.label = view.label; pill.title = title;
     }
   }
   const unsubscribeStore = store.subscribe(syncPills);

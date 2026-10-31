@@ -10,7 +10,7 @@ const agent = (id: string, workspaceId = "workspace"): AgentRecord => ({
   id, workspaceId, cwd: "/repo", provider: "claude", model: null, status: "idle",
 });
 const record = (workspaceId = "workspace"): PillRecord => ({
-  workspaceId, registration: { update() {}, remove() {} }, label: "-- · -- · --", title: "Status", contextPercent: null,
+  workspaceId, registration: { update() {}, remove() {} }, label: "-- · -- · --", title: "Status",
 });
 
 describe("pill reconciliation", () => {

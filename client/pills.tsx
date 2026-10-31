@@ -3,7 +3,7 @@ import type { AgentRecord } from "./store";
 
 export type PillRecord = {
   workspaceId: string; registration: PluginButtonRegistration;
-  label: string; title: string; contextPercent: number | null;
+  label: string; title: string;
 };
 
 export function reconcilePills(previous: Map<string, PillRecord>, next: AgentRecord[]): { add: AgentRecord[]; remove: string[] } {
