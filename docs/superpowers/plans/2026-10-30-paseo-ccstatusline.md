@@ -6,14 +6,14 @@
 
 **Architecture:** Pure TypeScript modules in `shared/` turn settings and facts into segments. A daemon handler reads local files and runs `git`. App code owns one pill for each agent and draws the segments.
 
-**Tech Stack:** TypeScript, React Native primitives, Zod, Vitest, `@getpaseo/plugin` 0.13.2, `@getpaseo/client` 0.13.2.
+**Tech Stack:** TypeScript, React Native primitives, Zod, Vitest, `@getpaseo/plugin` 0.14.0, `@getpaseo/client` 0.14.0.
 
 **Spec:** `docs/superpowers/specs/2026-10-30-paseo-ccstatusline-design.md`. Read it first. The spec owns all widget, color, data and update rules.
 
 ## Global Constraints
 
 - Plugin ID and package name: `paseo-ccstatusline`. License: MIT.
-- `requirements.paseo` is `>=0.13.2`. Every API must exist in 0.13.2.
+- `requirements.paseo` is `>=0.14.0`. Every API must exist in 0.14.0.
 - CLI path: `/Applications/Paseo.app/Contents/Resources/bin/paseo`.
 - Do not restart the Paseo daemon. Use `paseo plugin reload paseo-ccstatusline`.
 - Do not edit `~/.config/ccstatusline/settings.json` or other Claude Code files.
@@ -138,14 +138,16 @@ Expected: PASS.
 **Interfaces:**
 - Consumes: `StatusSettings`, `themeColors` from Task 2.
 - Produces:
-  - `type AgentFacts = { modelLabel: string | null; contextUsed: number | null; contextMax: number | null; branch: string | null; cwd: string | null; memory: { used: number; total: number } | null; tokens: { cached: number | null; input: number | null; output: number | null }; speed: { input: number | null; output: number | null; total: number | null }; session: UsageWindow | null; weekly: UsageWindow | null; thinking: string | null; skill: string | null; outputStyle: string | null }`
+  - `type AgentFacts = { modelLabel: string | null; contextUsed: number | null; contextMax: number | null; branch: string | null; cwd: string | null; memory: { used: number; total: number } | null; tokens: { cached: number | null; input: number | null; output: number | null }; speed: { input: number | null; output: number | null; total: number | null }; usageAccount: string | null; session: UsageWindow | null; weekly: UsageWindow | null; thinking: string | null; skill: string | null; outputStyle: string | null }`
   - `type UsageWindow = { usedPct: number | null; resetsAt: string | null }`
   - `type Segment = { text: string; fg: string; bg: string; estimate: boolean }`
   - `buildLines(settings: StatusSettings, facts: AgentFacts, now: Date): { lines: Segment[][]; hiddenTypes: string[] }`
+  - `hoverText(lines: Segment[][], usageAccount: string | null): string`, with `Usage: <account>` as the first row if an account is known.
   - `plainText(lines: Segment[][]): string`, with ` | ` between segments and `\n` between rows.
   - `pillLabel(facts: AgentFacts): string`
   - `contextPercent(facts: AgentFacts): number | null`
-  - `selectUsage(reports: UsageReportEntry[], provider: string): { session: UsageWindow | null; weekly: UsageWindow | null }`
+  - `type ProviderUsageEntry = PaseoProviderUsageResult["providers"][number]`
+  - `selectUsage(entries: ProviderUsageEntry[], provider: string): { account: string | null; session: UsageWindow | null; weekly: UsageWindow | null }`, which matches `providerId` and the window IDs `five_hour` and `weekly`.
   - `nextSpeed(previous: TokenSample | null, current: TokenSample, running: boolean): { speed: AgentFacts["speed"]; sample: TokenSample }`
 
 - [ ] **Step 1: Write failing tests**
@@ -172,7 +174,7 @@ Also test these cases:
 - `selectUsage` returns nulls for no report, for two reports with one `providerId`, and for a report with `status` other than `available`.
 - `nextSpeed` returns nulls for no earlier sample, for a count decrease and for an idle agent.
 
-Use the window shapes from the Task 1 report for the `selectUsage` fixtures.
+Use the window shapes from `docs/superpowers/spikes/2026-10-30-checks.md` for the `selectUsage` fixtures. Also assert that `selectUsage` returns the `displayName` as `account`, and that `hoverText` starts with `Usage: <account>`.
 
 - [ ] **Step 2: Run the tests and make sure that they fail, then commit the tests**
 
@@ -232,7 +234,7 @@ Expected: PASS.
 - Produces:
   - `createStatusStore(deps: { readSettings; readFacts; listUsage; listModels; now }): StatusStore`
   - `StatusStore` has `setAgents`, `upsertAgent`, `removeAgent`, `getView(agentId): AgentView | null`, `subscribe(listener)` and `stop()`.
-  - `type AgentView = { label: string; title: string; contextPercent: number | null; lines: Segment[][]; hiddenTypes: string[]; settingsError: string | null }`
+  - `type AgentView = { label: string; title: string; usageAccount: string | null; contextPercent: number | null; lines: Segment[][]; hiddenTypes: string[]; settingsError: string | null }`
   - `reconcilePills(previous: Map<string, PillRecord>, next: AgentRecord[]): { add: AgentRecord[]; remove: string[] }`
 
 - [ ] **Step 1: Write failing tests**
@@ -255,7 +257,7 @@ Expected: FAIL because the modules do not exist.
 
 - [ ] **Step 3: Implement the store, pills and icon**
 
-The icon component reads `contextPercent` with `useSyncExternalStore` by `agentId`, and it draws to the `size` prop. Register one stable icon component. Use the owned `agents.list({ subscribe: {} })` subscription. Read `lastUsage` and `runtimeInfo` from the SDK agent record. Get the model label from the provider model list. Use the Task 1 tooltip result to set `title`.
+The icon component reads `contextPercent` with `useSyncExternalStore` by `agentId`, and it draws to the `size` prop. Register one stable icon component. Use the owned `agents.list({ subscribe: {} })` subscription. Read `lastUsage` and `runtimeInfo` from the SDK agent record. Get the model label from the provider model list. Set `title` to `hoverText(...)`.
 
 - [ ] **Step 4: Run each test file and typecheck, then commit**
 
@@ -274,7 +276,7 @@ Expected: PASS.
 
 - [ ] **Step 1: Write failing tests**
 
-Use the Task 1 timeline shapes as fixtures. Assert these results:
+Use the shapes from `docs/superpowers/spikes/2026-10-30-checks.md` as fixtures: a Claude `tool_call` with `name` `Skill` and `detail.label`, and a Codex list with no such item. Assert these results:
 - `lastSkill` returns the newest skill.
 - `lastSkill` returns null for a provider with no reliable shape.
 - `segmentRowStyle()` has `flexWrap: "wrap"`, and the outer view style has `maxWidth: "100%"`, so long text wraps inside the popover.
@@ -286,7 +288,7 @@ Expected: FAIL because the modules do not exist.
 
 - [ ] **Step 3: Implement the popover**
 
-Show the agent title, the rows, a muted line for `hiddenTypes`, and `settingsError` with the path. Use `theme.colors` for all text outside segments. Set `fontStyle: "italic"` for segments with `estimate: true`. Draw separators without a Powerline font. While the popover is open, refresh each 5 seconds and read the recent timeline for the skill.
+Show the agent title, a muted `Usage: <account>` row if an account is known, the rows, a muted line for `hiddenTypes`, and `settingsError` with the path. Use `theme.colors` for all text outside segments. Set `fontStyle: "italic"` for segments with `estimate: true`. Draw separators without a Powerline font. While the popover is open, refresh each 5 seconds and read the recent timeline for the skill.
 
 - [ ] **Step 4: Run each test file, typecheck and the DOM audit, then commit**
 

@@ -31,13 +31,13 @@ Each of these items is a failure, also for a view that looks correct:
 - The plugin edits Claude Code configuration, or adds hooks to it.
 - The plugin reads OAuth tokens, or sends data outside the daemon machine and the connected Paseo clients.
 - The plugin writes to `~/.config/ccstatusline/settings.json`.
-- The plugin shows values from another agent or provider without saying so. A wrong value is worse than a hidden one.
+- The plugin shows values from another agent or provider without saying so. A wrong value is worse than a hidden one. There is one approved exception, in the usage rules.
 - Frequent updates slow the chat, for example a pill update for every streamed token.
 - A Paseo daemon restart is part of the install or test steps. A restart stops all running agents.
 
 ## Constraints
 
-- The target is the installed Paseo 0.13.2. The local checkout at `/Volumes/WDSN580/src/paseo-work/paseo` is newer and it is only a reference. Make sure that each API used exists in 0.13.2. Set `requirements.paseo` to `>=0.13.2`.
+- The target is the installed Paseo 0.14.0. The app updated from 0.13.2 during this work. The local checkout at `/Volumes/WDSN580/src/paseo-work/paseo` is only a reference. Make sure that each API used exists in 0.14.0. Set `requirements.paseo` to `>=0.14.0`.
 - Follow the plugin file rules: `index.client.tsx` and `client/` for the app, `index.server.ts` and `server/` for the daemon, and `shared/` for both. Client code must not use Node APIs.
 - Use React Native primitives and `theme.colors` for Paseo interface colors. Only status segments use colors from the status line theme.
 - A pill label is one line of muted text in a pill that is at most 160 pixels wide. A pill icon area is 16 by 16 pixels.
@@ -61,7 +61,7 @@ The pill behavior is `popover`.
 
 The `title` holds one plain text row for each configured line. Segments in a row are separated by ` | `. The rows use the same hidden-widget rules as the popover.
 
-The Paseo tooltip was not tested with several rows. The first implementation task tests this before other work starts. If the rows are unreadable in the real tooltip, set `title` to `Context, 5-hour usage, weekly usage` and record the result in the final report.
+Simon tested this in the real tooltip on Paseo 0.14.0. All rows are visible, and long rows wrap. Simon accepted this result, so `title` holds all rows. The first row is the account row from the usage rules, if an account name is known.
 
 ### Popover
 
@@ -128,9 +128,9 @@ Token rules: `ccstatusline` shows session totals, but Paseo `lastUsage` holds va
 
 Speed rules: Paseo has no speed field. Keep the last token counts and time for each agent in the client. While the agent is running and the counts increase, speed is the token increase divided by the elapsed time. If a count decreases or no earlier sample exists, hide the speed. Paseo updates usage rarely during a turn, so speed is best effort and it is often hidden. Speed text is italic in the popover because it is an estimate.
 
-Usage rules: call `paseo.providers.listUsage()`, and select the report with a `providerId` that matches the agent provider. The first implementation task records the real report shape for Claude, Codex and ZeroSub. Read the real reports for Claude and Codex first. Then identify the 5-hour window and the weekly window from the window `id`, `shortLabel` or `label`. A provider with no match has hidden usage widgets and `--` in the pill. If a provider has more than one report, use `--` and hidden widgets, because the agent account is unknown through this API. Simon has the ZeroSub plugin, so this case is real. If the first task shows that one report can describe a different account than the agent uses, stop and ask Simon before the usage widgets are built. Refresh usage at most once each 60 seconds, and share one result among all pills.
+Usage rules: call `paseo.providers.listUsage()`, and select the report with a `providerId` that matches the agent provider. The result has a `providers` array. Each entry has `providerId`, `displayName`, `status` and `windows`. The 5-hour window has the `id` `five_hour`, and the weekly window has the `id` `weekly`. Use only these window IDs. A provider with no match has hidden usage widgets and `--` in the pill. If a provider has more than one report, use `--` and hidden widgets, because the agent account is unknown through this API. Simon has the ZeroSub plugin, so this case is real. ZeroSub can also run an agent under a different account than the single report describes, and the plugin API cannot detect this. Simon approved this exception: the pill still shows the provider numbers, without a label. The hover text and popover show `Usage: <displayName>` in a separate muted row, so the source account is visible there. Simon also asked for a draft request to the Paseo maintainers, for an `agentId` option on `providers.listUsage()`. Publishing that request needs approval from Simon. If the option ships, use it and remove this exception. Refresh usage at most once each 60 seconds, and share one result among all pills.
 
-Skills rules: the protocol has no skill timeline item. The first implementation task looks for a reliable tool-call shape for skill use in Claude and Codex timelines. Read only the agent's recent timeline, only while its popover is open. Show the last skill that the timeline identifies. If a provider has no reliable shape, hide this widget for that provider. If a skill value is already known, the hover text includes it. Do not use `agent.commands()` for this widget, because it lists loaded skills and not used skills.
+Skills rules: the protocol has no skill timeline item. Claude timelines have a reliable shape: a `tool_call` item with `name` `Skill`, and the skill name in `detail.label` of a `plain_text` detail. The sampled Codex timeline has no reliable shape, so this widget is hidden for Codex. Read only the agent's recent timeline, only while its popover is open. Show the last skill that the timeline identifies. If a provider has no reliable shape, hide this widget for that provider. If a skill value is already known, the hover text includes it. Do not use `agent.commands()` for this widget, because it lists loaded skills and not used skills.
 
 Output style rules: for agents with the `claude` provider only, a server RPC reads `outputStyle` with this order: `<cwd>/.claude/settings.local.json`, `<cwd>/.claude/settings.json`, then the user settings at `$CLAUDE_CONFIG_DIR/settings.json` or `~/.claude/settings.json`. Read no other fields. Show the text after the last `:`. This is the configured value, and a running agent can differ.
 
