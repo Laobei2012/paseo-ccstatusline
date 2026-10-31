@@ -17,7 +17,42 @@ const expected = [
   ["thinking-effort", "Thinking: high"], ["skills", "Skill: superpowers:brainstorming"], ["output-style", "Style: simple-english"],
 ];
 
+// ccstatusline 2.2.33 getDefaultColor() values, converted at colorLevel 3.
+const defaultColors = [
+  ["model", "#06989a"], ["context-bar", "#3465a4"],
+  ["git-branch", "#75507b"], ["current-working-dir", "#3465a4"],
+  ["free-memory", "#06989a"], ["tokens-cached", "#06989a"],
+  ["tokens-input", "#3465a4"], ["tokens-output", "#d3d7cf"],
+  ["input-speed", "#06989a"], ["output-speed", "#06989a"], ["total-speed", "#06989a"],
+  ["reset-timer", "#729fcf"], ["session-usage", "#729fcf"],
+  ["weekly-reset-timer", "#729fcf"], ["weekly-usage", "#729fcf"],
+  ["thinking-effort", "#75507b"], ["skills", "#75507b"], ["output-style", "#06989a"],
+];
+
 describe("widget text and segments", () => {
+  it.each(defaultColors)("uses the default color and no background for %s", (type, fg) => {
+    for (const enabled of [false, true]) {
+      const settings = parseSettings({ lines: [[{ type }]], colorLevel: 3, powerline: { enabled } });
+      expect(buildLines(settings, all, now).lines[0][0]).toMatchObject({ fg, bg: null });
+    }
+  });
+
+  it("keeps an explicit foreground without inventing a background", () => {
+    const settings = parseSettings({ lines: [[{ type: "model", color: "red" }]], colorLevel: 3 });
+    expect(buildLines(settings, all, now).lines[0][0]).toMatchObject({ fg: "#cc0000", bg: null });
+  });
+
+  it("combines a default foreground with an explicit background at level 2", () => {
+    const settings = parseSettings({ lines: [[{ type: "free-memory", backgroundColor: "bgRed" }]], colorLevel: 2 });
+    expect(buildLines(settings, all, now).lines[0][0]).toMatchObject({ fg: "#008787", bg: "#d70000" });
+  });
+
+  it("hides negative context counts while keeping other widgets", () => {
+    const settings = parseSettings({ lines: [[{ type: "context-bar" }, { type: "model" }]] });
+    expect(buildLines(settings, { ...all, contextUsed: -5 }, now).lines[0].map((segment) => segment.text))
+      .toEqual(["Model: Opus 5.5"]);
+  });
+
   it.each(expected)("formats %s", (type, text) => {
     const { lines } = buildLines(parseSettings({ lines: [[{ type }]] }), all, now);
     expect(lines[0][0].text).toBe(text);

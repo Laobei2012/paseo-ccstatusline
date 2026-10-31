@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
 import { nextSpeed, type TokenSample } from "../shared/speed";
 
-const previous: TokenSample = { atMs: 1000, input: 10, output: 20 };
-const current: TokenSample = { atMs: 3000, input: 12, output: 220 };
+const previous: TokenSample = { atMs: 1000, input: 10, output: 20, running: true };
+const current: TokenSample = { atMs: 3000, input: 12, output: 220, running: true };
 const hidden = { input: null, output: null, total: null };
 
 it("estimates speeds from token increases and elapsed seconds", () => {
@@ -11,7 +11,19 @@ it("estimates speeds from token increases and elapsed seconds", () => {
 
 it("hides speed without an earlier sample or while idle", () => {
   expect(nextSpeed(null, current, true)).toEqual({ speed: hidden, sample: current });
-  expect(nextSpeed(previous, current, false).speed).toEqual(hidden);
+  expect(nextSpeed(previous, { ...current, running: false }, false).speed).toEqual(hidden);
+});
+
+it("hides the first running sample after idle and measures only later running samples", () => {
+  const idle = nextSpeed(null, { atMs: 0, input: 0, output: 500, running: false }, false).sample;
+  const resumed = nextSpeed(idle, { atMs: 300000, input: 0, output: 900, running: true }, true);
+  expect(resumed.speed).toEqual(hidden);
+  expect(nextSpeed(resumed.sample, { atMs: 302000, input: 0, output: 1100, running: true }, true).speed)
+    .toEqual({ input: null, output: 100, total: 100 });
+});
+
+it("hides speed when the current sample is marked idle", () => {
+  expect(nextSpeed(previous, { ...current, running: false }, true).speed).toEqual(hidden);
 });
 
 it("hides a reset sample and accepts it as the next baseline", () => {

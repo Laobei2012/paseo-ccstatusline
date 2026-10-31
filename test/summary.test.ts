@@ -14,7 +14,8 @@ it("clamps context usage while rejecting missing and invalid denominators", () =
   expect(contextPercent({ ...all, contextMax: 0 })).toBeNull();
   expect(contextPercent({ ...all, contextUsed: null })).toBeNull();
   expect(contextPercent({ ...all, contextUsed: Infinity })).toBeNull();
-  expect(contextPercent({ ...all, contextUsed: -1 })).toBe(0);
+  expect(contextPercent({ ...all, contextUsed: -1 })).toBeNull();
+  expect(pillLabel({ ...all, contextUsed: -5 })).toBe("-- · 63% · 39%");
 });
 
 it("keeps valid zero measurements visible", () => {
