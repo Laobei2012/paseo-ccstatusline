@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { PluginClientContext, PluginComposerPillContribution } from "@getpaseo/plugin/client";
+import contribute from "../index.client";
 import { reconcilePills, type PillRecord } from "../client/pills";
 import type { AgentRecord } from "../client/store";
+
+vi.mock("react-native", () => ({ Text: () => null, View: () => null }));
 
 const agent = (id: string, workspaceId = "workspace"): AgentRecord => ({
   id, workspaceId, cwd: "/repo", provider: "claude", model: null, status: "idle",
@@ -28,5 +32,50 @@ describe("pill reconciliation", () => {
     expect(reconcilePills(previous, [agent("moved", "other"), agent("kept")])).toEqual({
       add: [agent("moved", "other")], remove: ["moved"],
     });
+  });
+
+  it("owns the subscription, keeps a stable icon and ignores updates after removal", async () => {
+    vi.useFakeTimers();
+    type Observer = {
+      snapshot(value: { entries: { agent: AgentRecord }[] }): void;
+      update(value: { type: "agent_update"; payload: { kind: "upsert"; agent: AgentRecord } | { kind: "remove"; agentId: string } }): void;
+    };
+    let observer!: Observer;
+    const unsubscribe = vi.fn();
+    const registrations: { update: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> }[] = [];
+    const add = vi.fn((_pill: PluginComposerPillContribution) => {
+      const registration = { update: vi.fn(), remove: vi.fn() };
+      registrations.push(registration); return registration;
+    });
+    const list = vi.fn(async (_options: { subscribe: object; signal: AbortSignal }) => ({
+      subscription: { subscribe: (value: Observer) => { observer = value; return unsubscribe; } },
+    }));
+    const stop = contribute({
+      paseo: { agents: { list }, providers: { listUsage: async () => ({ providers: [] }), listModels: async () => ({ models: [] }) } },
+      rpc: async (contract: { name: string }) => contract.name === "settings.read"
+        ? { ok: false, reason: "missing", path: "/settings" } : { branch: null, memory: null, outputStyle: null },
+      addComposerPill: add,
+    } as unknown as PluginClientContext);
+    try {
+      await Promise.resolve();
+      observer.snapshot({ entries: [{ agent: agent("old") }] });
+      await vi.advanceTimersByTimeAsync(1000);
+      const icon = add.mock.calls[0][0].button.icon;
+      observer.snapshot({ entries: [{ agent: agent("new") }] });
+      expect(registrations[0].remove).toHaveBeenCalledTimes(1);
+      expect(add.mock.calls[1][0].button.icon).toBe(icon);
+      observer.update({ type: "agent_update", payload: { kind: "remove", agentId: "new" } });
+      await vi.advanceTimersByTimeAsync(1000);
+      observer.update({ type: "agent_update", payload: { kind: "upsert", agent: agent("new") } });
+      expect(vi.getTimerCount()).toBe(0);
+      expect(add).toHaveBeenCalledTimes(2);
+      expect(list.mock.calls[0][0].subscribe).toEqual({});
+    } finally {
+      stop();
+      expect(list.mock.calls[0][0].signal.aborted).toBe(true);
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+      vi.useRealTimers();
+    }
   });
 });

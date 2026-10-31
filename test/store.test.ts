@@ -20,9 +20,11 @@ describe("status store", () => {
     const deps = {
       readSettings: vi.fn(async () => ({ ok: true as const, settings, path: "/settings" })),
       readFacts: vi.fn(async (_input: { cwd: string; provider: string }) => ({ branch: "main", memory: null, outputStyle: "simple" })),
-      listUsage: vi.fn(async () => ({ providers: [{ providerId: "claude", displayName: "Primary", status: "available" as const,
-        windows: [{ id: "five_hour", usedPct: 63 }, { id: "weekly", usedPct: 39 }] }] })),
-      listModels: vi.fn(async (provider: string) => ({ provider, models: [{ provider, id: "raw-model", label: "Friendly model" }] })),
+      listUsage: vi.fn(async () => ({ requestId: "usage", fetchedAt: new Date().toISOString(),
+        providers: [{ providerId: "claude", displayName: "Primary", status: "available" as const, planLabel: null,
+          windows: [{ id: "five_hour", label: "Session", usedPct: 63 }, { id: "weekly", label: "Weekly", usedPct: 39 }] }] })),
+      listModels: vi.fn(async (provider: string) => ({ provider, requestId: "models", fetchedAt: new Date().toISOString(),
+        models: [{ provider, id: "raw-model", label: "Friendly model" }] })),
       now: () => Date.now(),
     };
     store = createStatusStore(deps);
@@ -99,6 +101,16 @@ describe("status store", () => {
     await vi.advanceTimersByTimeAsync(2000);
     expect(store.getView("a")?.title).not.toContain("⎇ main");
     expect(console.error).toHaveBeenCalled();
+  });
+
+  it("keeps polling limits when agents leave and return", async () => {
+    const deps = setup();
+    store.setAgents([agent("a")]); await flush();
+    store.setAgents([]); await flush();
+    store.setAgents([agent("a")]); await flush();
+    expect(deps.readFacts).toHaveBeenCalledTimes(1);
+    expect(deps.listUsage).toHaveBeenCalledTimes(1);
+    expect(store.getView("a")?.label).toBe("74% · 63% · 39%");
   });
 
   it("uses SDK context, model labels, account attribution and runtime thinking", async () => {
