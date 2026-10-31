@@ -112,6 +112,23 @@ it("revalidates immediately on new turns even inside the steady-state polling in
   expect(store.getView("a")?.usageAccount).toBe("B");
 });
 
+it("does not query unloaded closed agents and invalidates their pending account on close", async () => {
+  const deps = setup();
+  store.setAgents([{ ...agent(), status: "closed" }]);
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(deps.listUsage).not.toHaveBeenCalled();
+  let finish = (_value: PaseoUsageReportsResult) => {};
+  deps.listUsage.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; })).mockResolvedValue(attributedUsage("B"));
+  store.upsertAgent(agent());
+  store.upsertAgent({ ...agent(), status: "closed" });
+  finish(attributedUsage("A"));
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(store.getView("a")?.usageAccount).toBeNull();
+  store.upsertAgent(agent());
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(store.getView("a")?.usageAccount).toBe("B");
+});
+
 it("rejects a removed registration's pending usage after the same agent ID returns", async () => {
   const deps = setup();
   let finish = (_value: PaseoUsageReportsResult) => {};

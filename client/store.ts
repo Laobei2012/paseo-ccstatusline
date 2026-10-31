@@ -196,7 +196,10 @@ export function createStatusStore(deps: Dependencies): StatusStore {
     const newTurn = agent.activeTurn?.turnId !== undefined && agent.activeTurn.turnId !== previous?.agent.activeTurn?.turnId;
     const startedRunning = agent.status === "running" && previous?.agent.status !== "running";
     const currentUsage = usage.get(agent.id);
-    if (!currentUsage || currentUsage.provider !== agent.provider || currentUsage.sessionId !== sessionId || newTurn || startedRunning) {
+    if (agent.status === "closed") {
+      if (currentUsage) clearInterval(currentUsage.timer);
+      usage.delete(agent.id);
+    } else if (!currentUsage || currentUsage.provider !== agent.provider || currentUsage.sessionId !== sessionId || newTurn || startedRunning) {
       if (currentUsage) clearInterval(currentUsage.timer);
       const timer = setInterval(() => { schedule(); void pollUsage(agent.id); }, 60000);
       usage.set(agent.id, { timer, provider: agent.provider, sessionId, attemptedAt: -Infinity, at: -Infinity, pending: false, value: null });
