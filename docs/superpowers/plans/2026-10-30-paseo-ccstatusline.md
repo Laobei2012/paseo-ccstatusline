@@ -141,7 +141,7 @@ Expected: PASS.
 - Produces:
   - `type AgentFacts = { modelLabel: string | null; contextUsed: number | null; contextMax: number | null; branch: string | null; cwd: string | null; memory: { used: number; total: number } | null; tokens: { cached: number | null; input: number | null; output: number | null }; speed: { input: number | null; output: number | null; total: number | null }; usageAccount: string | null; session: UsageWindow | null; weekly: UsageWindow | null; thinking: string | null; skill: string | null; outputStyle: string | null }`
   - `type UsageWindow = { usedPct: number | null; resetsAt: string | null }`
-  - `type Segment = { text: string; fg: string; bg: string; estimate: boolean }`
+  - `type Segment = { text: string; fg: string; bg: string | null; estimate: boolean }` (`null` background is transparent).
   - `buildLines(settings: StatusSettings, facts: AgentFacts, now: Date): { lines: Segment[][]; hiddenTypes: string[] }`
   - `hoverText(lines: Segment[][], usageAccount: string | null): string`, with `Usage: <account>` as the first row if an account is known.
   - `plainText(lines: Segment[][]): string`, with ` | ` between segments and `\n` between rows.
@@ -150,6 +150,7 @@ Expected: PASS.
   - `type ProviderUsageEntry = PaseoProviderUsageResult["providers"][number]`
   - `selectUsage(entries: ProviderUsageEntry[], provider: string): { account: string | null; session: UsageWindow | null; weekly: UsageWindow | null }`, which matches `providerId` and the window IDs `five_hour` and `weekly`.
   - `nextSpeed(previous: TokenSample | null, current: TokenSample, running: boolean): { speed: AgentFacts["speed"]; sample: TokenSample }`
+  - `TokenSample` includes `running: boolean`; speed requires both samples to be running.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -289,7 +290,7 @@ Expected: FAIL because the modules do not exist.
 
 - [ ] **Step 3: Implement the popover**
 
-Show the agent title, a muted `Usage: <account>` row if an account is known, the rows, a muted line for `hiddenTypes`, and `settingsError` with the path. Use `theme.colors` for all text outside segments. Set `fontStyle: "italic"` for segments with `estimate: true`. Draw separators without a Powerline font. While the popover is open, refresh each 5 seconds and read the recent timeline for the skill.
+Show the agent title, a muted `Usage: <account>` row if an account is known, the rows, a muted line for `hiddenTypes`, and `settingsError` with the path. Use `theme.colors` for all text outside segments. Draw a null segment background as transparent. Use the segment text color, with a `theme.colors` fallback only if the widget has no color at all. Set `fontStyle: "italic"` for segments with `estimate: true`. Draw separators without a Powerline font. While the popover is open, refresh each 5 seconds and read the recent timeline for the skill.
 
 - [ ] **Step 4: Run each test file, typecheck and the DOM audit, then commit**
 

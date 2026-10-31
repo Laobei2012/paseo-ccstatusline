@@ -4,7 +4,17 @@ import { toHex } from "./colors";
 import { builtInThemes, themeColors } from "./themes";
 import { contextPercent } from "./summary";
 
-export type Segment = { text: string; fg: string; bg: string; estimate: boolean };
+export type Segment = { text: string; fg: string; bg: string | null; estimate: boolean };
+
+// Each widget's getDefaultColor() in ccstatusline 2.2.33.
+const defaultColors: Record<string, string> = {
+  model: "cyan", "context-bar": "blue", "git-branch": "magenta",
+  "current-working-dir": "blue", "free-memory": "cyan", "tokens-cached": "cyan",
+  "tokens-input": "blue", "tokens-output": "white", "input-speed": "cyan",
+  "output-speed": "cyan", "total-speed": "cyan", "reset-timer": "brightBlue",
+  "session-usage": "brightBlue", "weekly-reset-timer": "brightBlue", "weekly-usage": "brightBlue",
+  "thinking-effort": "magenta", skills: "magenta", "output-style": "cyan",
+};
 
 // Default formats follow ccstatusline 2.2.33. See THIRD_PARTY_NOTICES.md.
 function tokens(value: number, decimals = 1): string {
@@ -92,8 +102,8 @@ export function buildLines(settings: StatusSettings, facts: AgentFacts, now: Dat
       if (text === undefined) hiddenTypes.add(widget.type);
       if (text == null) continue;
       const colors = useTheme ? themeColors(settings, slot) : {
-        fg: toHex(widget.color ?? "white", settings.colorLevel) ?? "#d3d7cf",
-        bg: toHex(widget.backgroundColor ?? "black", settings.colorLevel) ?? "#000000",
+        fg: toHex(widget.color ?? defaultColors[widget.type], settings.colorLevel) ?? "#d3d7cf",
+        bg: widget.backgroundColor === undefined ? null : toHex(widget.backgroundColor, settings.colorLevel),
       };
       segments.push({ text, ...colors, estimate: widget.type.endsWith("-speed") });
       slot++;

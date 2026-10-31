@@ -1,13 +1,13 @@
 import { type AgentFacts, isNonNegativeNumber } from "./facts";
 
 // atMs is a timestamp in milliseconds. Counts are the latest report, not sums.
-export type TokenSample = { atMs: number; input: number | null; output: number | null };
+export type TokenSample = { atMs: number; input: number | null; output: number | null; running: boolean };
 
 export function nextSpeed(previous: TokenSample | null, current: TokenSample, running: boolean): {
   speed: AgentFacts["speed"]; sample: TokenSample;
 } {
   const hidden = { speed: { input: null, output: null, total: null }, sample: current };
-  if (!running || !previous || !Number.isFinite(current.atMs) || !Number.isFinite(previous.atMs) || current.atMs <= previous.atMs) return hidden;
+  if (!running || !current.running || !previous?.running || !Number.isFinite(current.atMs) || !Number.isFinite(previous.atMs) || current.atMs <= previous.atMs) return hidden;
   const seconds = (current.atMs - previous.atMs) / 1000;
   const delta = (before: number | null, after: number | null) =>
     isNonNegativeNumber(before) && isNonNegativeNumber(after) ? after - before : null;
