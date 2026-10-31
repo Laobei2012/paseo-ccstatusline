@@ -26,6 +26,10 @@ describe("status store", () => {
       listModels: vi.fn(async (provider: string) => ({ provider, requestId: "models", fetchedAt: new Date().toISOString(),
         models: [{ provider, id: "raw-model", label: "Friendly model" }] })),
       now: () => Date.now(),
+      readTimeline: vi.fn(async (_agentId: string): Promise<import("../shared/skills").TimelineItem[]> => [{
+        type: "tool_call", callId: "skill", name: "Skill", status: "completed", error: null,
+        detail: { type: "plain_text", label: "paseo" },
+      }]),
     };
     store = createStatusStore(deps);
     return deps;
@@ -157,5 +161,47 @@ describe("status store", () => {
     await Promise.resolve(); await Promise.resolve();
     expect(vi.getTimerCount()).toBe(0);
     expect(store.getView("a")).toBeNull();
+  });
+
+  it("reads skills only while the popover is open and retains the known skill in hover", async () => {
+    const deps = setup(); store.setAgents([agent("a")]); await flush();
+    expect(deps.readTimeline).not.toHaveBeenCalled();
+    const close = store.openPopover("a"); await flush();
+    expect(deps.readTimeline).toHaveBeenCalledTimes(1);
+    expect(store.getView("a")?.title).toContain("Skill: paseo");
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(deps.readTimeline).toHaveBeenCalledTimes(2);
+    expect(deps.readSettings).toHaveBeenCalledTimes(3);
+    close(); await vi.advanceTimersByTimeAsync(10000);
+    expect(deps.readTimeline).toHaveBeenCalledTimes(2);
+    expect(store.getView("a")?.title).toContain("Skill: paseo");
+    const closeAgain = store.openPopover("a"); await flush();
+    store.stop();
+    expect(vi.getTimerCount()).toBe(0);
+    closeAgain();
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(deps.readTimeline).toHaveBeenCalledTimes(3);
+  });
+
+  it("never fetches a Codex timeline for skills", async () => {
+    const deps = setup(); store.setAgents([{ ...agent("a"), provider: "codex" }]); await flush();
+    const close = store.openPopover("a"); await vi.advanceTimersByTimeAsync(11000);
+    expect(deps.readTimeline).not.toHaveBeenCalled();
+    expect(store.getView("a")?.title).not.toContain("Skill:");
+    close();
+  });
+
+  it("ignores a timeline result after close and clears open-popover timers on removal", async () => {
+    const deps = setup(); store.setAgents([agent("a")]); await flush();
+    let resolve!: (items: import("../shared/skills").TimelineItem[]) => void;
+    deps.readTimeline.mockImplementation(() => new Promise((done) => { resolve = done; }));
+    const close = store.openPopover("a"); close();
+    await flush();
+    resolve([{ type: "tool_call", callId: "late", name: "Skill", status: "completed", error: null,
+      detail: { type: "plain_text", label: "late-skill" } }]);
+    await flush();
+    expect(store.getView("a")?.title).not.toContain("late-skill");
+    store.openPopover("a"); store.removeAgent("a"); await flush();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
