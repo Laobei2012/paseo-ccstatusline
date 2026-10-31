@@ -10,7 +10,7 @@ export default function contribute(client: PluginClientContext) {
   const store = createStatusStore({
     readSettings: () => client.rpc(settingsReadRpc, {}),
     readFacts: (input) => client.rpc(factsReadRpc, input),
-    listUsage: () => client.paseo.providers.listUsage(),
+    listUsage: (agentId) => client.paseo.providers.listUsageReports({ agentId }),
     listModels: (provider) => client.paseo.providers.listModels(provider),
     now: () => Date.now(),
     readTimeline: async (agentId) => {

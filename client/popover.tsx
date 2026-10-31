@@ -19,7 +19,9 @@ export function createStatusPopover(store: StatusStore, modes = createViewModeSt
       <Text accessibilityRole="header" style={{ color: colors.foreground, fontWeight: "600", fontSize: 14 }}>
         {view?.agentTitle || "Agent status"}
       </Text>
-      {view?.usageAccount ? <Text style={{ color: colors.foregroundMuted, fontSize: 12 }}>Usage: {view.usageAccount}</Text> : null}
+      {view?.usageAccount || view?.usageSource ? <Text style={{ color: colors.foregroundMuted, fontSize: 12 }}>
+        {view.usageAccount ? `Usage: ${view.usageAccount}` : `Usage source: ${view.usageSource}`}
+      </Text> : null}
       <View accessibilityRole="toolbar" accessibilityLabel="Status view" style={{ flexDirection: "row", gap: 4 }}>
         {viewModes.map((value) => <Pressable key={value}
           accessibilityRole="button" accessibilityLabel={value === "text" ? "Text view" : "Colored view"}

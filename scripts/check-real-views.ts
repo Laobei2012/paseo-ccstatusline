@@ -17,14 +17,14 @@ try {
   const settingsResult = settingsOutputSchema.parse(await daemon.invokePluginRpc("paseo-ccstatusline", "settings.read", {}));
   if (!settingsResult.ok) throw new Error("Settings RPC unavailable");
   const { entries } = await paseo.agents.list();
-  const usage = await paseo.providers.listUsage();
   const sections = [`# End-to-end checks, 2026-10-31\n\nCaptured at ${new Date().toISOString()}. Source implementation: 5ecc4b9.\n\nThis is an SDK and view-builder check, not a desktop render. Account email text is redacted before writing or printing. No timeline is read because no popover is open.\n\nSettings came from the running plugin's settings.read RPC. Facts came from its facts.read RPC; agents, model labels and usage came from the live SDK. The real buildLines, hoverText and pillLabel functions produced the values below.`];
   for (const provider of ["claude", "codex"]) {
     const agent = entries.find(({ agent }) => agent.provider === provider && !agent.archivedAt && agent.workspaceId)?.agent;
     if (!agent) throw new Error(`No eligible ${provider} agent`);
     const remote = factsOutputSchema.parse(await daemon.invokePluginRpc("paseo-ccstatusline", "facts.read", { cwd: agent.cwd, provider }));
     const catalog = await paseo.providers.listModels(provider);
-    const selected = selectUsage(usage.providers, provider);
+    const usage = await paseo.providers.listUsageReports({ agentId: agent.id });
+    const selected = selectUsage(usage.reports, provider);
     const model = agent.runtimeInfo?.model ?? agent.model;
     const facts: AgentFacts = {
       modelLabel: catalog.models?.find((item) => item.id === model || item.aliases?.includes(model ?? ""))?.label ?? model,

@@ -20,9 +20,10 @@ describe("status store", () => {
     const deps = {
       readSettings: vi.fn(async () => ({ ok: true as const, settings, path: "/settings" })),
       readFacts: vi.fn(async (_input: { cwd: string; provider: string }) => ({ branch: "main", memory: null, outputStyle: "simple" })),
-      listUsage: vi.fn(async () => ({ requestId: "usage", fetchedAt: new Date().toISOString(),
-        providers: [{ providerId: "claude", displayName: "Primary", status: "available" as const, planLabel: null,
-          windows: [{ id: "five_hour", label: "Session", usedPct: 63 }, { id: "weekly", label: "Weekly", usedPct: 39 }] }] })),
+      listUsage: vi.fn(async (_agentId?: string) => ({ requestId: "usage",
+        reports: [{ id: "claude:primary", sourceId: "claude", sourceLabel: "Claude", account: { label: "Primary" },
+          fetchedAt: new Date().toISOString(), report: { status: "available" as const,
+          windows: [{ id: "five_hour", label: "Session", usedPct: 63 }, { id: "weekly", label: "Weekly", usedPct: 39 }] } }] })),
       listModels: vi.fn(async (provider: string) => ({ provider, requestId: "models", fetchedAt: new Date().toISOString(),
         models: [{ provider, id: "raw-model", label: "Friendly model" }] })),
       now: () => Date.now(),
@@ -35,6 +36,27 @@ describe("status store", () => {
     return deps;
   }
   const flush = () => vi.advanceTimersByTimeAsync(1000);
+
+  it("keeps all five configured rows and the attributed account for two same-provider agents", async () => {
+    const deps = setup();
+    const fiveRows = parseSettings({ lines: [
+      [{ type: "model" }], [{ type: "current-working-dir" }], [{ type: "tokens-input" }],
+      [{ type: "session-usage" }, { type: "weekly-usage" }], [{ type: "thinking-effort" }],
+    ] });
+    deps.readSettings.mockResolvedValue({ ok: true, settings: fiveRows, path: "/settings" });
+    const primary = (await deps.listUsage()).reports[0];
+    const accounts = [primary, { ...primary, id: "claude:secondary", account: { label: "Secondary" } }];
+    deps.listUsage.mockImplementation(async (id) => ({ requestId: "usage", fetchedAt: "",
+      reports: id === undefined ? accounts : [accounts[id === "a" ? 0 : 1]],
+    }));
+    store.setAgents([{ ...agent("a"), thinkingOptionId: "high" }, { ...agent("b"), thinkingOptionId: "high" }]);
+    await vi.advanceTimersByTimeAsync(31000);
+    expect(store.getView("a")?.lines.filter((line) => line.length)).toHaveLength(5);
+    expect(store.getView("a")?.usageAccount).toBe("Primary");
+    expect(store.getView("b")?.usageAccount).toBe("Secondary");
+    expect(deps.listUsage).toHaveBeenCalledWith("a");
+    expect(deps.listUsage).toHaveBeenCalledWith("b");
+  });
 
   it("replaces the directory on reconnect snapshots", async () => {
     setup();
@@ -82,18 +104,18 @@ describe("status store", () => {
     expect(store.getView("a")).toBe(view);
   });
 
-  it("shares facts by cwd every 30 seconds and usage globally every 60 seconds", async () => {
+  it("shares facts by cwd every 30 seconds and usage per agent every 60 seconds", async () => {
     const deps = setup();
     store.setAgents([agent("a"), agent("b"), agent("c", "/other")]);
     await flush();
     expect(deps.readFacts).toHaveBeenCalledTimes(2);
-    expect(deps.listUsage).toHaveBeenCalledTimes(1);
+    expect(deps.listUsage).toHaveBeenCalledTimes(3);
     await vi.advanceTimersByTimeAsync(29000);
     expect(deps.readFacts).toHaveBeenCalledTimes(4);
-    expect(deps.listUsage).toHaveBeenCalledTimes(1);
+    expect(deps.listUsage).toHaveBeenCalledTimes(3);
     await vi.advanceTimersByTimeAsync(30000);
     expect(deps.readFacts).toHaveBeenCalledTimes(6);
-    expect(deps.listUsage).toHaveBeenCalledTimes(2);
+    expect(deps.listUsage).toHaveBeenCalledTimes(6);
   });
 
   it("keeps failed facts for five minutes, then hides them", async () => {
@@ -113,7 +135,7 @@ describe("status store", () => {
     store.setAgents([]); await flush();
     store.setAgents([agent("a")]); await flush();
     expect(deps.readFacts).toHaveBeenCalledTimes(1);
-    expect(deps.listUsage).toHaveBeenCalledTimes(1);
+    expect(deps.listUsage).toHaveBeenCalledTimes(2);
     expect(store.getView("a")?.label).toBe("74% · 63% · 39%");
   });
 

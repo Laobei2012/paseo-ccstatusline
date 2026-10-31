@@ -117,6 +117,6 @@ export function plainText(lines: Segment[][]): string {
   return lines.filter((line) => line.length > 0).map((line) => line.map((segment) => segment.text).join(" | ")).join("\n");
 }
 
-export function hoverText(lines: Segment[][], usageAccount: string | null): string {
-  return [usageAccount ? `Usage: ${usageAccount}` : "", plainText(lines)].filter(Boolean).join("\n");
+export function hoverText(lines: Segment[][], usageAccount: string | null, usageSource?: string | null): string {
+  return [usageAccount ? `Usage: ${usageAccount}` : usageSource ? `Usage source: ${usageSource}` : "", plainText(lines)].filter(Boolean).join("\n");
 }
