@@ -150,7 +150,7 @@ Keep formatting and data selection in pure TypeScript modules in `shared/`, so t
 Each item is required before the final report:
 
 1. Unit tests cover configuration parsing, invalid files, theme colors and the color restart on each line. They also cover all 18 widget formats, hidden values, `--` in the pill, speed rules and usage window selection. Use Simon's real file shape and the expected text above as a fixture.
-2. `npm run typecheck` passes with `@getpaseo/plugin` at 0.13.2.
+2. `npm run typecheck` passes with `@getpaseo/plugin` at 0.14.0.
 3. `client/` passes the DOM audit in the Paseo plugin skill.
 4. `/Applications/Paseo.app/Contents/Resources/bin/paseo plugin install <absolute path>` succeeds, and `paseo plugin ls` shows `running` with no error. Use `paseo plugin reload paseo-ccstatusline` after changes. Do not restart the daemon.
 5. On the desktop app, test a Claude agent and a Codex agent. Record screenshots of the pill, hover and press for each. Change tabs and make sure that the pill and popover show the selected agent. Save a change to a test copy of the configuration and make sure that the view updates. Do not edit Simon's real file for this test. Add a server environment override `CCSTATUSLINE_SETTINGS_PATH` only for this purpose.

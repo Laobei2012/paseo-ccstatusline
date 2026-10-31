@@ -43,6 +43,7 @@ This task can change the design, so stop after it and report.
 **Files:**
 - Create: `paseo-plugin.json`, `package.json`, `tsconfig.json`, `OVERVIEW.md`, `LICENSE`, `index.client.tsx`, `vitest.config.ts`
 - Create: `scripts/dump-usage-reports.ts`
+- Create: `scripts/inspect-skill-timelines.ts`
 - Create: `docs/superpowers/spikes/2026-10-30-checks.md`
 
 **Interfaces:**
@@ -50,7 +51,7 @@ This task can change the design, so stop after it and report.
 
 - [ ] **Step 1: Create the project with `paseo plugin init` in a temporary folder, and copy its files to the repository root**
 
-Set the manifest `id` and `requirements` from Global Constraints. Pin `@getpaseo/plugin` and `@getpaseo/client` to 0.13.2. Add Vitest.
+Set the manifest `id` and `requirements` from Global Constraints. Pin `@getpaseo/plugin` and `@getpaseo/client` to 0.14.0. Add Vitest.
 
 - [ ] **Step 2: Add one test pill to `index.client.tsx` with a five-row `title`**
 
