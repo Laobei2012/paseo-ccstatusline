@@ -65,7 +65,7 @@ Simon tested this in the real tooltip on Paseo 0.14.0. All rows are visible, and
 
 ### Popover
 
-The popover shows the agent title and then one row for each configured line. Each row is a wrapping row of segments. Each segment shows the widget text in monospace. Powerline separators are drawn as `View` shapes or with another method that does not need a Powerline font.
+The popover shows the agent title and then one row for each configured line. Each configured line stays on one row and never wraps. All segment rows sit together in one horizontal scroll area, so they scroll sideways together. The title, usage account row, settings error and hidden-widgets line stay outside that area and can wrap. Each segment shows the widget text in monospace. Powerline separators are drawn as `View` shapes or with another method that does not need a Powerline font.
 
 ### Configuration
 

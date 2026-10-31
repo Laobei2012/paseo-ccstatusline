@@ -32,7 +32,7 @@ Each line has a test in the named task:
 2. A settings file with no lines, a bad widget entry or a new unknown type gives a message or a hidden widget, and no crash. Task 2 and Task 3.
 3. Context use above the maximum shows 100%. A maximum of 0 hides the context value. Task 3.
 4. A reconnect snapshot replaces all pills, and an update after a removal does nothing. Task 5.
-5. A long `cwd` or skill name wraps inside the popover and does not leave its area. Task 6.
+5. Each configured line stays on one row without wrapping, including long `cwd` and skill names. All segment rows share one horizontal scroll area and scroll sideways together. Task 6.
 
 ---
 
@@ -281,7 +281,7 @@ Expected: PASS.
 Use the shapes from `docs/superpowers/spikes/2026-10-30-checks.md` as fixtures: a Claude `tool_call` with `name` `Skill` and `detail.label`, and a Codex list with no such item. Assert these results:
 - `lastSkill` returns the newest skill.
 - `lastSkill` returns null for a provider with no reliable shape.
-- `segmentRowStyle()` has `flexWrap: "wrap"`, and the outer view style has `maxWidth: "100%"`, so long text wraps inside the popover.
+- `segmentRowStyle()` has no `flexWrap`, and segments have no `flexShrink` or width limit, so each configured line stays on one row. Segment text has `numberOfLines={1}`. All segment rows share one horizontal scroll area.
 
 - [ ] **Step 2: Run the tests and make sure that they fail, then commit the tests**
 

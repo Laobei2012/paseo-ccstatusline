@@ -4,18 +4,24 @@ import type { Segment } from "../shared/widgets";
 
 vi.mock("react-native", () => ({ Text: "Text", View: "View", Platform: { OS: "web" } }));
 
-it("wraps rows and constrains each segment inside the popover", () => {
-  expect(segmentRowStyle()).toMatchObject({ flexDirection: "row", flexWrap: "wrap", maxWidth: "100%", paddingRight: 6 });
-  expect(segmentOuterStyle()).toMatchObject({ maxWidth: "100%", flexShrink: 1 });
+it("keeps configured lines on one row and preserves each segment's full width", () => {
+  expect(segmentRowStyle()).toMatchObject({ flexDirection: "row", paddingRight: 6 });
+  expect(segmentRowStyle().flexWrap).toBeUndefined();
+  expect(segmentRowStyle().maxWidth).toBeUndefined();
+  expect(segmentOuterStyle().flexShrink).toBeUndefined();
+  expect(segmentOuterStyle().maxWidth).toBeUndefined();
 });
 
 it("renders null backgrounds as transparent and estimates as italic monospace", () => {
   const segment: Segment = { text: "Estimated output ".repeat(50), fg: "#123456", bg: null, estimate: true };
   const row = SegmentRow({ segments: [segment], foreground: "#abcdef", powerline: false, bold: false });
   const outer = row.props.children[0];
-  expect(outer.props.style).toMatchObject({ backgroundColor: "transparent", maxWidth: "100%" });
-  expect(outer.props.children[0].props.style).toMatchObject({ color: "#123456", fontFamily: "monospace", fontStyle: "italic", flexShrink: 1,
-    minWidth: 0, overflowWrap: "anywhere" });
+  expect(outer.props.style).toMatchObject({ backgroundColor: "transparent" });
+  const text = outer.props.children[0];
+  expect(text.props.style).toMatchObject({ color: "#123456", fontFamily: "monospace", fontStyle: "italic" });
+  expect(text.props.style.flexShrink).toBeUndefined();
+  expect(text.props.style.overflowWrap).toBeUndefined();
+  expect(text.props.numberOfLines).toBe(1);
 });
 
 it("draws a Powerline separator as a View shape and preserves configured colors", () => {
