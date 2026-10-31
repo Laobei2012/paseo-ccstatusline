@@ -5,6 +5,9 @@ import { themeColors } from "../shared/themes";
 import { toHex } from "../shared/colors";
 
 describe("status colors", () => {
+  it.each([["red", "#d70000"], ["cyan", "#008787"]])("uses the source ANSI256 mapping for named %s at level 2", (color, expected) => {
+    expect(toHex(color, 2)).toBe(expected);
+  });
   it.each([
     ["ansi256:131", "#af5f5f"], ["ansi256:220", "#ffd700"],
     ["ansi256:68", "#5f87d7"], ["ansi256:108", "#87af87"],

@@ -23,7 +23,7 @@ describe("settings parsing", () => {
   it("accepts an empty layout and supplies defaults", () => {
     expect(parseSettings({ lines: [] })).toEqual({
       lines: [], colorLevel: 2, globalBold: false,
-      powerline: { enabled: false, theme: "nord-aurora", continueThemeAcrossLines: false },
+      powerline: { enabled: false, continueThemeAcrossLines: false },
     });
   });
 
@@ -35,6 +35,10 @@ describe("settings parsing", () => {
     expect(settings.lines[0]).toEqual([
       { id: "a", type: "model" }, { id: "b", type: "future-widget", rawValue: true },
     ]);
+  });
+
+  it("keeps an omitted Powerline theme absent so widget colors can apply", () => {
+    expect(parseSettings({ lines: [[{ type: "model", color: "red" }]], powerline: { enabled: true } }).powerline).not.toHaveProperty("theme");
   });
 });
 
@@ -86,5 +90,18 @@ describe("daemon settings reader", () => {
     await writeFile(path, JSON.stringify(fixture));
     await utimes(path, new Date(), new Date(Date.now() + 2000));
     expect(await readSettings()).toMatchObject({ ok: true, settings: { lines: expect.any(Array) } });
+  });
+
+  it("reloads a same-size edit even when the modification timestamp is preserved", async () => {
+    const path = await settingsPath();
+    const timestamp = new Date("2026-01-01T00:00:00Z");
+    await writeFile(path, JSON.stringify({ lines: [[{ type: "model", color: "red" }]] }));
+    await utimes(path, timestamp, timestamp);
+    expect(await readSettings()).toMatchObject({ ok: true, settings: { lines: [[{ color: "red" }]] } });
+    // Ensure the metadata-change clock advances, while deliberately fixing mtime.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await writeFile(path, JSON.stringify({ lines: [[{ type: "model", color: "tan" }]] }));
+    await utimes(path, timestamp, timestamp);
+    expect(await readSettings()).toMatchObject({ ok: true, settings: { lines: [[{ color: "tan" }]] } });
   });
 });
