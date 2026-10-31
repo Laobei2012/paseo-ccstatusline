@@ -35,7 +35,7 @@ export default function contribute(client: PluginClientContext) {
       const title = view?.title || view?.settingsError || "Loading status…";
       const registration = client.addComposerPill({
         id: "status", workspaceId: agent.workspaceId!, agentId: agent.id,
-        button: { label, title, icon: Icon, behavior: { kind: "popover", Content: StatusContent } },
+        button: { label, title, icon: Icon, hover: { Content: StatusContent }, behavior: { kind: "popover", Content: StatusContent } },
       });
       pills.set(agent.id, { workspaceId: agent.workspaceId!, registration, label, title });
     }

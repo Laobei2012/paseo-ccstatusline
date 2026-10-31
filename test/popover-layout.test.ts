@@ -24,7 +24,6 @@ it("puts every status row in one horizontal scroller and keeps explanatory text 
     agentTitle: "Test agent", usageAccount: "Test account", settingsError: "Settings error",
     hiddenTypes: ["skills"], lines, powerline: true, globalBold: false,
   }) } as unknown as StatusStore;
-  const Popover = createStatusPopover(store);
   const mode = createViewModeStore();
   mode.setMode("colored");
   const ColoredPopover = createStatusPopover(store, mode);

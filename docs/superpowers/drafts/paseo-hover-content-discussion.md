@@ -1,10 +1,10 @@
 # Draft: custom hover content for plugin buttons
 
-Status: local design only, not published or implemented. Checked 2026-10-31.
+Status: isolated host implementation and plugin integration in progress, not published or deployed. Checked 2026-10-31. The original installed plugin remains on its compatible branch.
 
 ## Requested behavior and current dependency
 
-Simon requested that the status pill's hover view remember the last selected text or colored view. The plugin currently renders all rows in the plain-text tooltip, and colored rows in the press-opened popover. There is no text/colored mode selector in the current plugin. The existing no-wrap behavior must be preserved: every configured row stays on one line, and all rows share one horizontal scroller.
+Simon requested that the status pill's hover view remember the last selected text or colored view. The released app exposes only text tooltips. This development integration uses a new optional public hover descriptor and a shared Text/Colored selector. Every configured row stays on one line, and all rows share one horizontal scroller.
 
 The public contract cannot implement colored hover content today:
 
@@ -24,29 +24,33 @@ Add one optional field to `PluginButton`, separate from press behavior:
 hover?: { Content: React.ComponentType<PluginButtonContentProps> };
 ```
 
-The field is a proposal, not an API plugins can use now. Omission preserves today's plain-text tooltip. Supplying it replaces only the desktop hover body; `title` remains the accessible label and sheet title. It does not change the press action. Content receives the same host, theme, layout, context and `close()` capabilities as press content.
+The field is implemented only in the isolated host worktree, not the released app. Omission preserves today's plain-text tooltip. Supplying it replaces only the desktop hover body; `title` remains the accessible label and sheet title. It does not change the press action. Content receives the same host, theme, layout, context and `close()` capabilities as press content.
 
-The host owns anchoring, delay, bounds, dismissal, error containment and installation context. Mount the custom body only while open. It must permit pointer movement from trigger into content, horizontal scrolling, and use of the mode selector without dismissal. Keyboard focus should expose the same preview; Escape closes it without moving focus. Pressing the trigger closes the preview before running the existing press behavior. Hover must not run an action or open a compact sheet. Compact/touch clients keep the press-opened surface and have no hover preview. Removal, hiding, disabling, host disconnect and plugin teardown dismiss the preview and unmount its body.
+The host owns anchoring, bounds, dismissal, error containment and installation context through `HoverCard`. Content mounts only while open. It permits pointer movement from trigger into content, horizontal scrolling, and use of controls without dismissal. Keyboard focus exposes the same preview; Arrow Down enters its first focusable control. Enter/Space preserve the pill's press behavior. Escape restores focus to the pill only when focus was inside the preview; unrelated focus stays put. Pressing the trigger closes the preview before running the existing press behavior. Compact/touch clients keep the press-opened surface and have no hover preview. Pane/workspace navigation, trigger disappearance, removal, hiding, disabling, host disconnect and plugin teardown dismiss the preview and unmount its body.
 
 Descriptor updates to label/title must not reset an open custom body's state. Replacing the hover component closes the preview. Existing behavior-update closing semantics remain unchanged. The plugin owns mode selection; the host does not store plugin-specific text/colored modes.
 
 ## Exact host work
 
-Paths below are relative to the reference Paseo repository. No changes have been made there.
+Paths below are relative to the isolated host worktree `/tmp/paseo-plugin-hover-content`, branch `simon/plugin-hover-content`, based on clean reference `main` at `a4f696620`. The reference checkout is unchanged.
 
 1. `packages/plugin/src/client/buttons.ts`: declare the optional hover descriptor using existing exported content props. The existing `client/index.ts` exports already expose `PluginButton`; no new runtime module is needed.
 2. `packages/app/src/plugins/buttons/validation.ts`: validate the optional descriptor and component on registration and update, preserving atomic validation failures. Retain translated title handling.
 3. `packages/app/src/plugins/buttons/model.ts`: own preview closing rules on update/removal, coordinating preview and press-opened surface state. Keep ordinary title/label updates from unmounting a stable hover component.
 4. `packages/app/src/plugins/buttons/view.tsx`: render the optional body in a host-owned hover surface under `ButtonEnvironment`, with the contextual props and error boundary used for press content. Suppress the old text tooltip and prevent competing surfaces. Use the host's documented hover/floating-panel patterns; do not route pointer events through the icon.
-5. `packages/app/src/plugins/popover.tsx`: reuse bounds and installation providers for the hover surface as appropriate. Keep one host surface with plugin-controlled horizontal row scrolling; do not wrap custom content in a noninteractive tooltip that prevents scrolling.
+5. `packages/app/src/components/ui/hover-card.tsx`: add controlled open/onOpenChange, keyboard entry through a focusable descendant, and conditional Escape focus restoration. The button renderer reuses existing popover content padding/providers and bounds; no change to `plugins/popover.tsx` is required. `PluginHeaderButtons` receives route activity from `screens/workspace/workspace-screen.tsx`; composer pills use pane focus and retained-panel activity.
 6. `packages/app/src/plugins/buttons/model.test.ts`: cover update validation, preview lifecycle, removal and press coordination. Add renderer interaction coverage beside the button renderer for hover/focus, pointer travel, scroll, Escape, compact behavior and installation context. Check `docs/hover.md` and `docs/floating-panels.md` before choosing host primitives.
 7. `public-docs/plugins/reference.md`: document the field, replacement tooltip behavior, interactive preview, focus, lifecycle and mobile fallback. Update `docs/plugins.md` if its maintainer examples describe the old limitation as universal.
 
-No daemon protocol, usage transport or OAuth changes are needed. Release the SDK and app contract before adopting it in this plugin; raise `requirements.paseo` to the actual supporting release.
+No daemon protocol, usage transport or OAuth changes are needed. Local adoption requires matching patched SDK and app sources, not a public release. Public adoption must raise `requirements.paseo` to the actual supporting app release.
 
 ## Plugin follow-up once supported
 
-Use a stable custom content component for hover and press. Add an explicit Text/Colored selector, and keep its selected mode outside either component so unmounting/reopening or switching between hover and press does not reset it. Proposed scope is one preference per connected app installation, shared across agents; persistence across app restarts needs an explicit storage decision before implementation. Do not add persistence to ccstatusline or Claude settings. Existing agent-specific values and usage account attribution must stay in both views.
+The isolated plugin worktree `/tmp/paseo-ccstatusline-hover-integration`, branch `simon/paseo-ccstatusline-hover`, uses one stable custom content component for hover and press. Its Text/Colored selector stores selection outside the component. The preference is shared across agents in one client contribution lifetime. Closing/reopening either surface preserves it; plugin/app reload resets it to Text. No preference is persisted to disk, and existing agent-specific values and usage account attribution stay in both views.
+
+The integration manifest targets `0.14.0-hover-content.0` deliberately. This is a reserved local development target, not an assertion that a supporting version has shipped. It prevents accidental installation on released 0.14.0. Do not install or reload this branch against the live app. For an isolated test with matching patched app/SDK, use a temporary fixture copy with requirements matching that development app; do not alter the running app's version or configuration. Before public adoption, replace the development requirement with the actual supporting release and pin its published SDK.
+
+To typecheck locally, build the host SDK, use `npm pack --workspace=@getpaseo/plugin --ignore-scripts --pack-destination /tmp`, then install that tarball into this worktree with `npm install --no-save --package-lock=false --ignore-scripts /tmp/getpaseo-plugin-0.14.0.tgz`. Packing avoids resolving a linked SDK's separate React Native type tree. The checked-in dependency remains the release pin until a supporting SDK version is assigned.
 
 Both modes keep one horizontal scroller for the configured rows; title, account attribution, errors and hidden-widget explanation stay outside. Text mode uses the existing plain text formatter; colored mode uses `SegmentRow`. Opening custom hover content must acquire and release the same store observation lifecycle as the press popover, so timeline reads stop on close.
 
@@ -61,4 +65,4 @@ Both modes keep one horizontal scroller for the configured rows; title, account 
 
 Independent review reported `8b66541` and `0c7904a` OK to keep, with no proven layout regression. The missing popover structure assertion is added in `test/popover-layout.test.ts`: every nonempty row has the same single horizontal scroll ancestor, and all explanatory text has no such ancestor. This complements the segment-level tests; it does not exercise Yoga, browser layout or native gestures.
 
-Targeted checks: segment-layout (3), pills (4), popover-layout (1) passing; `npm run typecheck` and `git diff --check` passing. No runtime source changed during this follow-up, so no reload was needed. Desktop and native visual checks remain pending.
+Targeted plugin checks: view-mode (1), pills (4), popover-layout (2) passing; `npm run typecheck` passes against the packed patched SDK. Host checks and browser evidence are reported with the host implementation. No live reload or deployment was performed. Actual plugin desktop and native visual checks remain pending.

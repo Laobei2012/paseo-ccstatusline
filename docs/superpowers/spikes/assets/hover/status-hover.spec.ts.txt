@@ -1,0 +1,89 @@
+import { cp, mkdtemp, writeFile, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { test, expect } from "../support/fixtures";
+import { seedWorkspace } from "../support/helpers/seed-client";
+import { gotoAppShell } from "../support/helpers/app";
+import { buildAgentRoute } from "../support/helpers/mock-agent";
+import { pluginRequirements } from "../support/helpers/plugin-fixture";
+import { connectNewWorkspaceDaemonClient } from "../support/helpers/new-workspace";
+
+test("local status integration remembers view and scrolls long rows", async ({ page }, info) => {
+  test.setTimeout(180_000);
+  const source = process.env.CCSTATUSLINE_HOVER_SOURCE;
+  if (!source) throw new Error("Set CCSTATUSLINE_HOVER_SOURCE to the isolated plugin integration worktree");
+  const workspace = await seedWorkspace({ repoPrefix: "status-hover-long-unbroken-path-".repeat(3), title: "Status hover verification" });
+  const client = workspace.client;
+  const plugins = await connectNewWorkspaceDaemonClient({ ownProjects: false });
+  const config = await plugins.getDaemonConfig();
+  const directory = await mkdtemp(path.join(tmpdir(), "status-hover-fixture-"));
+  try {
+    for (const entry of ["index.client.tsx", "client", "shared"]) await cp(path.join(source, entry), path.join(directory, entry), { recursive: true });
+    await symlink(path.join(source, "node_modules"), path.join(directory, "node_modules"), "dir");
+    await writeFile(path.join(directory, "paseo-plugin.json"), JSON.stringify({ id: "paseo-ccstatusline", requirements: pluginRequirements }));
+    await writeFile(path.join(directory, "index.server.ts"), `
+      import { settingsReadRpc, factsReadRpc } from "./shared/rpc";
+      import { parseSettings } from "./shared/settings";
+      export default function contribute(server) {
+        const settings = parseSettings({ lines: [
+          [{type:"model"}, {type:"git-branch"}],
+          [{type:"current-working-dir"}, {type:"current-working-dir"}, {type:"current-working-dir"}],
+          [{type:"free-memory"}, {type:"unsupported-fixture"}],
+        ], powerline: {enabled:true, theme:"nord-aurora"} });
+        server.handle(settingsReadRpc, () => ({ok:true, path:"/fixture/settings.json", settings}));
+        server.handle(factsReadRpc, () => ({branch: "branch with spaces ".repeat(12), memory: {used:1024,total:2048}, outputStyle:null}));
+        return () => {};
+      }
+    `);
+    const agent = await client.createAgent({ provider: "mock", cwd: workspace.repoPath, workspaceId: workspace.workspaceId, title: "Status hover agent", model: "ten-second-stream", modeId: "load-test" });
+    await plugins.patchDaemonConfig({ pluginsEnabled: true });
+    await plugins.installDirectoryPlugin(directory);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoAppShell(page);
+    await page.goto(buildAgentRoute(workspace.workspaceId, agent.id));
+    const pill = page.getByRole("button").filter({ hasText: "-- · -- · --" });
+    await expect(pill).toHaveCount(1);
+    await pill.hover();
+    const text = page.getByRole("button", { name: "Text view", exact: true });
+    const colored = page.getByRole("button", { name: "Colored view", exact: true });
+    await expect(text).toHaveAttribute("aria-selected", "true");
+    await colored.click();
+    await expect(colored).toHaveAttribute("aria-selected", "true");
+    const rows = page.getByTestId("ccstatusline-rows");
+    await expect.poll(() => rows.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    for (const theme of ["light", "dark"] as const) {
+      await page.emulateMedia({colorScheme:theme});
+      await page.screenshot({path:info.outputPath(`status-colored-${theme}-left.png`)});
+      await rows.evaluate((element) => {element.scrollLeft=element.scrollWidth;});
+      await expect.poll(() => rows.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+      await page.screenshot({path:info.outputPath(`status-colored-${theme}-right.png`)});
+      await rows.evaluate((element) => {element.scrollLeft=0;});
+    }
+    await page.mouse.move(0, 0);
+    await expect(colored).toHaveCount(0);
+    await pill.hover();
+    await expect(colored).toHaveAttribute("aria-selected", "true");
+    await pill.click();
+    await expect(colored).toHaveCount(1);
+    await expect(colored).toHaveAttribute("aria-selected", "true");
+    await text.click();
+    await expect(text).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Escape");
+    await page.mouse.move(0, 0);
+    await pill.hover();
+    await expect(text).toHaveAttribute("aria-selected", "true");
+    await page.screenshot({path:info.outputPath("status-remembered-text.png")});
+    await page.setViewportSize({width:390,height:844});
+    await expect(text).toHaveCount(0);
+    await pill.click();
+    await expect(text).toHaveAttribute("aria-selected", "true");
+    await colored.click();
+    await page.screenshot({path:info.outputPath("status-compact-colored.png")});
+  } finally {
+    await plugins.removePlugin("paseo-ccstatusline");
+    await plugins.patchDaemonConfig({ pluginsEnabled: config.config.pluginsEnabled });
+    await plugins.close();
+    await workspace.cleanup();
+    await rm(directory, {recursive:true,force:true});
+  }
+});

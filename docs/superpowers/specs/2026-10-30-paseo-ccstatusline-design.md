@@ -11,7 +11,7 @@ The approved interaction is in `assets/composer-pill-prototype.html`. Open that 
 ## Goals
 
 1. Show a composer pill for each agent, with three numbers: context, 5-hour usage and weekly usage.
-2. If the user hovers over the pill, show all configured status lines using the last selected text or colored view. This follow-up requirement is pending a public host API extension; the current implementation still shows plain text.
+2. If the user hovers over the pill, show all configured status lines using the last selected text or colored view. The isolated development integration uses the matching public host API extension; released Paseo 0.14.0 does not support it.
 3. If the user presses the pill, show all configured status lines with colors.
 4. Use the line order, widget order and colors from `~/.config/ccstatusline/settings.json` on the daemon machine.
 5. Work for every provider. A value that a provider does not report must not stop the rest of the view.
@@ -59,11 +59,13 @@ The pill behavior is `popover`.
 
 ### Hover
 
-Follow-up from Simon's visual feedback: hover must remember the last selected text or colored view. The plain-text behavior below describes the current implementation, not completion of that requirement. Neither the pinned 0.14.0 SDK nor the deployed plugin contract exposes custom hover content. See `../drafts/paseo-hover-content-discussion.md` for the dependency, proposed API, exact host files and acceptance checks. Host implementation remains outside this plugin task.
+Follow-up from Simon's visual feedback: hover remembers the last selected text or colored view. This development branch registers one stable `Content` component for both hover and press, through `PluginButton.hover.Content` and popover behavior. Both surfaces show a Text/Colored selector. Selection is shared across agents within one client contribution lifetime; closing a surface preserves it, while plugin/app reload resets it to Text. No preference is written to ccstatusline or Claude settings.
+
+The SDK and app must both include the isolated host extension. There is no public app capability detector. The manifest therefore targets only the reserved development version `0.14.0-hover-content.0`, not a released version. Keep this branch separate from the installed plugin until a matching app is deployed. See `../drafts/paseo-hover-content-discussion.md` for the API and verification steps.
 
 The `title` holds one plain text row for each configured line. Segments in a row are separated by ` | `. The rows use the same hidden-widget rules as the popover.
 
-Simon tested this in the real tooltip on Paseo 0.14.0. All rows are visible, and long rows wrap. Simon accepted this result, so `title` holds all rows. The first row is the account row from the usage rules, if an account name is known.
+The title text remains available as an accessible label and sheet title. The custom hover body shows account attribution outside the shared row scroller. Both Text and Colored views preserve each configured line without wrapping.
 
 ### Popover
 

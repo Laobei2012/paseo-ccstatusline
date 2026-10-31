@@ -1,4 +1,6 @@
-Shows ccstatusline information beside each agent’s composer in Paseo 0.14.0 or later. The pill displays context, 5-hour usage and weekly usage, with `--` for missing values. Hover shows the configured rows; the popover adds colored rows that scroll sideways together and the agent title.
+Development integration for a Paseo app and SDK with `PluginButton.hover.Content`. This branch is not compatible with the released Paseo 0.14.0 app. Its manifest uses the reserved development target `0.14.0-hover-content.0` to prevent accidental installation on released apps; this is not a published supporting version.
+
+Shows ccstatusline information beside each agent’s composer. The pill displays context, 5-hour usage and weekly usage, with `--` for missing values. Hover and press show the same Text/Colored selector and remember its last selection across agents for this plugin's current client lifetime. Closing either surface preserves the selection; reloading the plugin or app resets it to Text. Configured rows scroll sideways together in either view.
 
 Reads the daemon’s `~/.config/ccstatusline/settings.json`, or `CCSTATUSLINE_SETTINGS_PATH` when configured. Saved settings refresh every 30 seconds and while the popover is open. It uses agent records, provider model catalogs and provider usage reports, plus daemon-side Git branch, memory and Claude output-style settings. It reads the recent Claude timeline only while the popover is open to identify the last explicit skill call. Codex skill detection is unavailable.
 

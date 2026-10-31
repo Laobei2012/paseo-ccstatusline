@@ -4,7 +4,7 @@
 
 **Goal:** Build a Paseo plugin that shows the `ccstatusline` layout for each agent. It has a composer pill summary, a hover text view and a colored popover.
 
-**Pending follow-up:** Simon requested that hover remember the last selected text or colored view. Current public APIs cannot render custom content on hover. The concrete host dependency is recorded in `../drafts/paseo-hover-content-discussion.md`; do not mark this request complete or implement private host workarounds. The no-wrap implementation is retained at `0c7904a`, with visual checks still pending.
+**Development follow-up:** Hover and press now share a stable content component and Text/Colored selection for one client contribution lifetime. This isolated integration requires the matching host extension described in `../drafts/paseo-hover-content-discussion.md`. The manifest targets reserved development version `0.14.0-hover-content.0` and must not be installed in the released app. Public release adoption and actual plugin visual checks remain pending. The no-wrap implementation is retained at `0c7904a`.
 
 **Architecture:** Pure TypeScript modules in `shared/` turn settings and facts into segments. A daemon handler reads local files and runs `git`. App code owns one pill for each agent and draws the segments.
 
