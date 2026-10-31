@@ -64,6 +64,14 @@ describe("pill reconciliation", () => {
       observer.snapshot({ entries: [{ agent: agent("new") }] });
       expect(registrations[0].remove).toHaveBeenCalledTimes(1);
       expect(add.mock.calls[1][0].button.icon).toBe(icon);
+      observer.update({ type: "agent_update", payload: { kind: "upsert", agent: { ...agent("new"),
+        lastUsage: { contextWindowUsedTokens: 101, contextWindowMaxTokens: 1000 } } } });
+      await vi.advanceTimersByTimeAsync(1000);
+      registrations[1].update.mockClear();
+      observer.update({ type: "agent_update", payload: { kind: "upsert", agent: { ...agent("new"),
+        lastUsage: { contextWindowUsedTokens: 102, contextWindowMaxTokens: 1000 } } } });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(registrations[1].update).not.toHaveBeenCalled();
       observer.update({ type: "agent_update", payload: { kind: "remove", agentId: "new" } });
       await vi.advanceTimersByTimeAsync(1000);
       observer.update({ type: "agent_update", payload: { kind: "upsert", agent: agent("new") } });
