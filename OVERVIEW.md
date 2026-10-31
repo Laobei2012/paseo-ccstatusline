@@ -1,0 +1,1 @@
+A Task 1 probe for displaying ccstatusline information in Paseo. The composer pill currently contains fixed example values for testing a five-row tooltip; these are not live agent measurements. Requires Paseo 0.13.2 or later.

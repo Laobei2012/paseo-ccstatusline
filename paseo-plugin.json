@@ -1,0 +1,6 @@
+{
+  "id": "paseo-ccstatusline",
+  "requirements": {
+    "paseo": ">=0.13.2"
+  }
+}
