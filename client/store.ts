@@ -5,13 +5,15 @@ import type { StatusSettings } from "../shared/settings";
 import { nextSpeed, type TokenSample } from "../shared/speed";
 import { contextPercent, pillLabel } from "../shared/summary";
 import { selectUsage } from "../shared/usage";
+import { lastSkill, type TimelineItem } from "../shared/skills";
 import { buildLines, hoverText, type Segment } from "../shared/widgets";
 
 export type AgentRecord = Pick<PaseoAgent, "id" | "cwd" | "provider" | "workspaceId" | "model" | "status" |
-  "archivedAt" | "lastUsage" | "runtimeInfo" | "thinkingOptionId">;
+  "archivedAt" | "lastUsage" | "runtimeInfo" | "thinkingOptionId"> & { title?: string | null };
 export type AgentView = {
   label: string; title: string; usageAccount: string | null; contextPercent: number | null;
   lines: Segment[][]; hiddenTypes: string[]; settingsError: string | null;
+  agentTitle: string | null; powerline: boolean; globalBold: boolean;
 };
 export type StatusStore = {
   setAgents(agents: AgentRecord[]): void;
@@ -19,6 +21,7 @@ export type StatusStore = {
   removeAgent(agentId: string): void;
   getView(agentId: string): AgentView | null;
   subscribe(listener: () => void): () => void;
+  openPopover(agentId: string): () => void;
   stop(): void;
 };
 type Dependencies = {
@@ -27,9 +30,11 @@ type Dependencies = {
   listUsage(): Promise<PaseoProviderUsageResult>;
   listModels(provider: string): Promise<PaseoProviderModelsResult>;
   now(): number;
+  readTimeline(agentId: string): Promise<TimelineItem[]>;
 };
 type Directory = { timer: ReturnType<typeof setInterval> | null; pending: boolean; value: FactsOutput | null; at: number; attemptedAt: number; providers: Set<string>; refreshRequested: boolean };
 type AgentState = { agent: AgentRecord; sample: TokenSample | null; speed: AgentFacts["speed"] };
+type OpenPopover = { timer: ReturnType<typeof setInterval>; readers: number; pending: boolean };
 
 export function createStatusStore(deps: Dependencies): StatusStore {
   const agents = new Map<string, AgentState>();
@@ -39,6 +44,8 @@ export function createStatusStore(deps: Dependencies): StatusStore {
   const modelRequests = new Set<string>();
   const modelRetryAt = new Map<string, number>();
   const listeners = new Set<() => void>();
+  const popovers = new Map<string, OpenPopover>();
+  const skills = new Map<string, { label: string; at: number; provider: string }>();
   let settings: StatusSettings | null = null;
   let settingsError: string | null = null;
   let settingsPending = false;
@@ -67,11 +74,13 @@ export function createStatusStore(deps: Dependencies): StatusStore {
       tokens: { cached: agent.lastUsage?.cachedInputTokens ?? null, input: agent.lastUsage?.inputTokens ?? null, output: agent.lastUsage?.outputTokens ?? null },
       speed, usageAccount: selected.account, session: selected.session, weekly: selected.weekly,
       thinking: agent.runtimeInfo?.thinkingOptionId ?? agent.thinkingOptionId ?? null,
-      skill: null, outputStyle: agent.provider === "claude" ? remote?.outputStyle ?? null : null,
+      skill: skills.get(agent.id)?.provider === agent.provider && deps.now() - skills.get(agent.id)!.at < 300000 ? skills.get(agent.id)!.label : null,
+      outputStyle: agent.provider === "claude" ? remote?.outputStyle ?? null : null,
     };
     const content = settings ? buildLines(settings, facts, new Date(deps.now())) : { lines: [], hiddenTypes: [] };
     return { ...content, label: pillLabel(facts), title: hoverText(content.lines, facts.usageAccount),
-      contextPercent: contextPercent(facts), usageAccount: facts.usageAccount, settingsError };
+      contextPercent: contextPercent(facts), usageAccount: facts.usageAccount, settingsError,
+      agentTitle: agent.title ?? null, powerline: settings?.powerline.enabled ?? false, globalBold: settings?.globalBold ?? false };
   }
 
   function schedule() {
@@ -208,12 +217,39 @@ export function createStatusStore(deps: Dependencies): StatusStore {
   }
   void pollSettings();
 
+  async function refreshPopover(id: string, popover: OpenPopover) {
+    const state = agents.get(id);
+    if (stopped || !state || popovers.get(id) !== popover) return;
+    void pollSettings();
+    const directory = directories.get(state.agent.cwd);
+    if (directory) void pollFacts(state.agent.cwd, directory, true);
+    void pollUsage();
+    schedule();
+    if (popover.pending || state.agent.provider !== "claude") return;
+    popover.pending = true;
+    try {
+      const items = await deps.readTimeline(id);
+      if (stopped || popovers.get(id) !== popover || agents.get(id)?.agent.provider !== state.agent.provider) return;
+      const label = lastSkill(items, state.agent.provider) ?? skills.get(id)?.label;
+      if (label) skills.set(id, { label, at: deps.now(), provider: state.agent.provider });
+      schedule();
+    } catch {
+      if (!stopped && popovers.get(id) === popover) console.error("ccstatusline skill timeline refresh failed");
+    } finally { popover.pending = false; }
+  }
+
+  function closePopover(id: string) {
+    const popover = popovers.get(id);
+    if (popover) clearInterval(popover.timer);
+    popovers.delete(id);
+  }
+
   const store: StatusStore = {
     setAgents(next) {
       if (stopped) return;
       const eligible = next.filter((agent) => agent.workspaceId && !agent.archivedAt);
       const ids = new Set(eligible.map((agent) => agent.id));
-      for (const id of agents.keys()) if (!ids.has(id)) { agents.delete(id); views.delete(id); membershipChanged = true; }
+      for (const id of agents.keys()) if (!ids.has(id)) { agents.delete(id); views.delete(id); skills.delete(id); closePopover(id); membershipChanged = true; }
       for (const agent of eligible) {
         if (!agents.has(agent.id)) membershipChanged = true;
         put(agent);
@@ -229,10 +265,27 @@ export function createStatusStore(deps: Dependencies): StatusStore {
     removeAgent(id) {
       if (stopped || !agents.delete(id)) return;
       views.delete(id); membershipChanged = true;
+      skills.delete(id); closePopover(id);
       syncPolling(); schedule();
     },
     getView: (id) => views.get(id) ?? null,
     subscribe(listener) { if (stopped) return () => {}; listeners.add(listener); return () => { listeners.delete(listener); }; },
+    openPopover(id) {
+      if (stopped || !agents.has(id)) return () => {};
+      let popover = popovers.get(id);
+      if (popover) popover.readers++;
+      else {
+        popover = { timer: setInterval(() => { void refreshPopover(id, popover!); }, 5000), readers: 1, pending: false };
+        popovers.set(id, popover);
+        void refreshPopover(id, popover);
+      }
+      let closed = false;
+      return () => {
+        if (closed) return;
+        closed = true;
+        if (popovers.get(id) === popover && --popover.readers === 0) closePopover(id);
+      };
+    },
     stop() {
       if (stopped) return;
       stopped = true;
@@ -240,6 +293,8 @@ export function createStatusStore(deps: Dependencies): StatusStore {
       if (usageTimer !== null) clearInterval(usageTimer);
       if (settingsTimer !== null) clearInterval(settingsTimer);
       for (const directory of directories.values()) if (directory.timer !== null) clearInterval(directory.timer);
+      for (const id of popovers.keys()) closePopover(id);
+      skills.clear();
       directories.clear(); agents.clear(); views.clear(); listeners.clear();
     },
   };

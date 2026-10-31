@@ -1,9 +1,8 @@
-import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
-import { useSyncExternalStore } from "react";
-import { Text, View } from "react-native";
+import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { createContextIcon } from "./client/context-icon";
 import { reconcilePills, type PillRecord } from "./client/pills";
 import { createStatusStore, type AgentRecord } from "./client/store";
+import { createStatusPopover } from "./client/popover";
 import { factsReadRpc, settingsReadRpc } from "./shared/rpc";
 
 export default function contribute(client: PluginClientContext) {
@@ -14,20 +13,17 @@ export default function contribute(client: PluginClientContext) {
     listUsage: () => client.paseo.providers.listUsage(),
     listModels: (provider) => client.paseo.providers.listModels(provider),
     now: () => Date.now(),
+    readTimeline: async (agentId) => {
+      const page = await client.paseo.agents.ref(agentId).timeline.refetch({ limit: 100 });
+      return [...page.entries].sort((a, b) => a.seqStart - b.seqStart).map((entry) => entry.item);
+    },
   });
   const Icon = createContextIcon(store);
   const pills = new Map<string, PillRecord>();
   const agents = new Map<string, AgentRecord>();
   const removedAgents = new Set<string>();
 
-  // Task 6 replaces this plain content with the styled popover and skill reader.
-  function StatusContent(props: PluginButtonContentProps) {
-    const id = props.context === "agent" ? props.agentId : "";
-    const view = useSyncExternalStore(store.subscribe, () => store.getView(id));
-    return <View style={{ padding: 12 }}><Text style={{ color: props.theme.colors.foreground }}>
-      {view?.settingsError ?? view?.title ?? "Loading status…"}
-    </Text></View>;
-  }
+  const StatusContent = createStatusPopover(store);
 
   function syncPills() {
     if (lifetime.signal.aborted) return;
