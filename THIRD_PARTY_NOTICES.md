@@ -3,7 +3,8 @@
 ## ccstatusline 2.2.33
 
 The built-in Powerline theme table in `shared/themes.ts`, named color values
-in `shared/colors.ts`, and default formatting adapted in `shared/widgets.ts`
+in `shared/colors.ts`, default formatting adapted in `shared/widgets.ts`,
+and the memory calculation in `server/facts.ts`
 come from ccstatusline 2.2.33:
 https://github.com/sirmalloc/ccstatusline
 

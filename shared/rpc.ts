@@ -14,3 +14,17 @@ export const settingsReadRpc = defineRpc({
   input: z.object({}),
   output: settingsOutputSchema,
 });
+
+export const factsOutputSchema = z.object({
+  branch: z.string().nullable(),
+  memory: z.object({ used: z.number().nonnegative(), total: z.number().positive() }).nullable(),
+  outputStyle: z.string().nullable(),
+});
+
+export type FactsOutput = z.infer<typeof factsOutputSchema>;
+
+export const factsReadRpc = defineRpc({
+  name: "facts.read",
+  input: z.object({ cwd: z.string(), provider: z.string() }),
+  output: factsOutputSchema,
+});
