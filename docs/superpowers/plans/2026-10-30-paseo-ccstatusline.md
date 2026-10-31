@@ -94,8 +94,8 @@ Report the SHA, the commands, the three results and any conflict with the spec.
   - `parseSettings(raw: unknown): StatusSettings`, which throws `SettingsError` with a reason.
   - `type StatusSettings = { lines: WidgetConfig[][]; colorLevel: number; globalBold: boolean; powerline: { enabled: boolean; theme: string; continueThemeAcrossLines: boolean } }`
   - `type WidgetConfig = { id: string; type: string; color?: string; backgroundColor?: string; rawValue?: boolean }`
-  - `themeColors(settings: StatusSettings, slot: number): { fg: string; bg: string }`, which returns hex values.
-  - `toHex(color: string): string | null` for named, `ansi256:` and `hex:` colors.
+  - `themeColors(settings: StatusSettings, slot: number): { fg: string; bg: string }` in `shared/themes.ts`, which returns hex values.
+  - `toHex(color: string, colorLevel?: number): string | null` in `shared/colors.ts` for named, `ansi256:` and `hex:` colors.
   - RPC `settings.read`, output `{ ok: true; settings: StatusSettings; path: string } | { ok: false; path: string; reason: string }`.
 
 - [ ] **Step 1: Write failing tests**

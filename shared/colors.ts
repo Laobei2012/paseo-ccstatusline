@@ -7,6 +7,13 @@ const namedColors: Record<string, string> = {
   brightBlue: "#729fcf", brightMagenta: "#ad7fa8", brightCyan: "#34e2e2", brightWhite: "#eeeeec",
 };
 
+// ccstatusline's fixed mappings for its ANSI256 color mode.
+const namedAnsi256: Record<string, number> = {
+  black: 16, red: 160, green: 70, yellow: 178, blue: 26, magenta: 96, cyan: 30, white: 188,
+  brightBlack: 59, brightRed: 203, brightGreen: 155, brightYellow: 227,
+  brightBlue: 111, brightMagenta: 140, brightCyan: 80, brightWhite: 231,
+};
+
 const ansi16 = [
   "#000000", "#800000", "#008000", "#808000", "#000080", "#800080", "#008080", "#c0c0c0",
   "#808080", "#ff0000", "#00ff00", "#ffff00", "#0000ff", "#ff00ff", "#00ffff", "#ffffff",
@@ -16,7 +23,7 @@ function rgb(red: number, green: number, blue: number): string {
   return `#${[red, green, blue].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
 }
 
-export function toHex(color: string): string | null {
+export function toHex(color: string, colorLevel = 3): string | null {
   if (/^hex:[\da-f]{6}$/i.test(color)) return `#${color.slice(4).toLowerCase()}`;
   if (/^ansi256:\d{1,3}$/.test(color)) {
     const index = Number(color.slice(8));
@@ -31,5 +38,6 @@ export function toHex(color: string): string | null {
     return rgb(levels[Math.floor(value / 36)], levels[Math.floor(value / 6) % 6], levels[value % 6]);
   }
   const name = color.startsWith("bg") ? color.charAt(2).toLowerCase() + color.slice(3) : color;
+  if (colorLevel === 2 && Object.hasOwn(namedAnsi256, name)) return toHex(`ansi256:${namedAnsi256[name]}`);
   return Object.hasOwn(namedColors, name) ? namedColors[name] : null;
 }

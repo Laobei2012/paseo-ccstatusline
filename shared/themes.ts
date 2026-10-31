@@ -176,12 +176,12 @@ export const builtInThemes: Readonly<Record<string, Theme>> = {
 // unless continueThemeAcrossLines is enabled; hidden widgets consume no slots.
 export function themeColors(settings: StatusSettings, slot: number): { fg: string; bg: string } {
   const themeName = settings.powerline.theme;
-  const theme = Object.hasOwn(builtInThemes, themeName) ? builtInThemes[themeName] : undefined;
+  const theme = themeName && Object.hasOwn(builtInThemes, themeName) ? builtInThemes[themeName] : undefined;
   const level = Math.max(1, settings.colorLevel) as 1 | 2 | 3;
   const palette = settings.powerline.enabled ? theme?.[level] : undefined;
   // Custom/unknown themes and Powerline-off use widget colors in the formatter.
   // Neutral colors keep this total if it is called without a built-in palette.
   if (!palette) return { fg: "#d3d7cf", bg: "#000000" };
   const index = ((Math.trunc(slot) % palette.bg.length) + palette.bg.length) % palette.bg.length;
-  return { fg: toHex(palette.fg[index])!, bg: toHex(palette.bg[index])! };
+  return { fg: toHex(palette.fg[index], settings.colorLevel)!, bg: toHex(palette.bg[index], settings.colorLevel)! };
 }

@@ -14,9 +14,9 @@ export const statusSettingsSchema = z.object({
   globalBold: z.boolean().default(false),
   powerline: z.object({
     enabled: z.boolean().default(false),
-    theme: z.string().default("nord-aurora"),
+    theme: z.string().optional(),
     continueThemeAcrossLines: z.boolean().default(false),
-  }).default({ enabled: false, theme: "nord-aurora", continueThemeAcrossLines: false }),
+  }).default({ enabled: false, continueThemeAcrossLines: false }),
 });
 
 export type WidgetConfig = z.infer<typeof widgetConfigSchema>;
