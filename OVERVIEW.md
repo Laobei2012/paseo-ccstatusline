@@ -1,1 +1,7 @@
-A Task 1 probe for displaying ccstatusline information in Paseo. The composer pill currently contains fixed example values for testing a five-row tooltip; these are not live agent measurements. Requires Paseo 0.14.0 or later.
+Shows ccstatusline information beside each agent’s composer in Paseo 0.14.0 or later. The pill displays context, 5-hour usage and weekly usage, with `--` for missing values. Hover shows the configured rows; the popover adds colored, wrapping segments and the agent title.
+
+Reads the daemon’s `~/.config/ccstatusline/settings.json`, or `CCSTATUSLINE_SETTINGS_PATH` when configured. Saved settings refresh every 30 seconds and while the popover is open. It uses agent records, provider model catalogs and provider usage reports, plus daemon-side Git branch, memory and Claude output-style settings. It reads the recent Claude timeline only while the popover is open to identify the last explicit skill call. Codex skill detection is unavailable.
+
+Usage reports belong to a provider account and cannot be bound to an individual agent through this API. ZeroSub can route an agent to a different account than the report describes. The hover and popover identify the report as `Usage: <displayName>`; multiple reports for the same provider hide usage values because the account is ambiguous.
+
+Token widgets show the last provider report’s values, not session totals. Speed is an estimate from changes between reports and is often unavailable. Missing values hide their widgets; unsupported widget names appear in the popover. Failed facts retain their last good values for five minutes. This plugin does not modify Claude Code settings or read authentication tokens.
