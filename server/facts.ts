@@ -12,8 +12,9 @@ async function readBranch(cwd: string): Promise<string | null> {
   try {
     const { stdout } = await run("git", ["branch", "--show-current"], { cwd, timeout: 2_000, windowsHide: true });
     return stdout.trim() || null;
-  } catch {
-    console.error("Cannot read Git branch; command output omitted.");
+  } catch (error) {
+    const code = (error as { code?: number | string }).code;
+    if (code !== 128 && code !== "ENOENT") console.error("Cannot read Git branch; command output omitted.");
     return null;
   }
 }
