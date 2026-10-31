@@ -47,7 +47,7 @@ export default function contribute(client: PluginClientContext) {
       const view = store.getView(id);
       if (!view) continue;
       const title = view.title || view.settingsError || "Status unavailable";
-      if (pill.label === view.label && pill.title === title && pill.contextPercent === view.contextPercent) continue;
+      if (pill.label === view.label && pill.title === title) continue;
       pill.registration.update({ label: view.label, title });
       pill.label = view.label; pill.title = title; pill.contextPercent = view.contextPercent;
     }

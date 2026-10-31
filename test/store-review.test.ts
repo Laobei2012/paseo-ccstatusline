@@ -10,9 +10,9 @@ const agent = (id = "a", provider = "claude"): AgentRecord => ({
   lastUsage: { inputTokens: 0, outputTokens: 100 },
 });
 const settings = (type: string) => parseSettings({ lines: [[{ type }]] });
-function setup(failFirstSettings = false) {
+function setup(failFirstSettings = false, widget = "output-speed") {
   const deps = {
-    readSettings: vi.fn(async () => ({ ok: true as const, settings: settings("output-speed"), path: "/settings" })),
+    readSettings: vi.fn(async () => ({ ok: true as const, settings: settings(widget), path: "/settings" })),
     readFacts: vi.fn(async ({ provider }: { cwd: string; provider: string }) => ({ branch: null, memory: null, outputStyle: provider === "claude" ? "simple" : null })),
     listModels: vi.fn(async (provider: string) => ({ provider, requestId: "models", fetchedAt: "", models: [] })),
     listUsage: vi.fn(async () => ({ requestId: "usage", fetchedAt: "", providers: [] })),
@@ -64,7 +64,7 @@ it("review: backs off failed model lists for 60 seconds", async () => {
 });
 
 it("review: fetches output style immediately when Claude joins a Codex directory", async () => {
-  const deps = setup(); deps.readSettings.mockResolvedValue({ ok: true, settings: settings("output-style"), path: "/settings" });
+  const deps = setup(false, "output-style");
   store.setAgents([agent("codex", "codex")]); await vi.advanceTimersByTimeAsync(1000);
   store.setAgents([agent("codex", "codex"), agent("claude")]); await vi.advanceTimersByTimeAsync(1000);
   expect(deps.readFacts).toHaveBeenCalledTimes(2);

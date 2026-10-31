@@ -28,7 +28,7 @@ type Dependencies = {
   listModels(provider: string): Promise<PaseoProviderModelsResult>;
   now(): number;
 };
-type Directory = { timer: ReturnType<typeof setInterval> | null; pending: boolean; value: FactsOutput | null; at: number; attemptedAt: number };
+type Directory = { timer: ReturnType<typeof setInterval> | null; pending: boolean; value: FactsOutput | null; at: number; attemptedAt: number; providers: Set<string>; refreshRequested: boolean };
 type AgentState = { agent: AgentRecord; sample: TokenSample | null; speed: AgentFacts["speed"] };
 
 export function createStatusStore(deps: Dependencies): StatusStore {
@@ -37,9 +37,12 @@ export function createStatusStore(deps: Dependencies): StatusStore {
   const directories = new Map<string, Directory>();
   const models = new Map<string, PaseoProviderModelsResult>();
   const modelRequests = new Set<string>();
+  const modelRetryAt = new Map<string, number>();
   const listeners = new Set<() => void>();
   let settings: StatusSettings | null = null;
   let settingsError: string | null = null;
+  let settingsPending = false;
+  let settingsTimer: ReturnType<typeof setInterval> | null = null;
   let usage: PaseoProviderUsageResult | null = null;
   let usageAt = -Infinity;
   let usageAttemptedAt = -Infinity;
@@ -87,8 +90,10 @@ export function createStatusStore(deps: Dependencies): StatusStore {
     }, 1000);
   }
 
-  async function pollFacts(cwd: string, directory: Directory) {
-    if (stopped || directory.pending || deps.now() - directory.attemptedAt < 30000) return;
+  async function pollFacts(cwd: string, directory: Directory, force = false) {
+    if (stopped) return;
+    if (directory.pending) { if (force) directory.refreshRequested = true; return; }
+    if (!force && deps.now() - directory.attemptedAt < 30000) return;
     directory.pending = true;
     // Output style is shared by cwd, but only Claude agents consume it.
     const users = [...agents.values()].filter(({ agent }) => agent.cwd === cwd);
@@ -105,6 +110,10 @@ export function createStatusStore(deps: Dependencies): StatusStore {
     } finally {
       directory.pending = false;
       if (!stopped && directory.timer !== null && directories.get(cwd) === directory) schedule();
+      if (!stopped && directory.timer !== null && directory.refreshRequested) {
+        directory.refreshRequested = false;
+        void pollFacts(cwd, directory, true);
+      }
     }
   }
 
@@ -126,13 +135,14 @@ export function createStatusStore(deps: Dependencies): StatusStore {
   }
 
   async function loadModels(provider: string) {
-    if (modelRequests.has(provider)) return;
+    if (modelRequests.has(provider) || deps.now() < (modelRetryAt.get(provider) ?? -Infinity)) return;
     modelRequests.add(provider);
     try {
       const result = await deps.listModels(provider);
       if (!stopped) { models.set(provider, result); if (agents.size) schedule(); }
     } catch {
       modelRequests.delete(provider);
+      modelRetryAt.set(provider, deps.now() + 60000);
       if (!stopped) console.error("ccstatusline model list failed");
     }
   }
@@ -146,11 +156,14 @@ export function createStatusStore(deps: Dependencies): StatusStore {
       if (deps.now() - directory.at >= 300000 && deps.now() - directory.attemptedAt >= 30000) directories.delete(cwd);
     }
     for (const cwd of cwds) {
-      const directory: Directory = directories.get(cwd) ?? { timer: null, pending: false, value: null, at: -Infinity, attemptedAt: -Infinity };
-      if (directory.timer !== null) continue;
-      directory.timer = setInterval(() => { schedule(); void pollFacts(cwd, directory); }, 30000);
+      const directory: Directory = directories.get(cwd) ?? { timer: null, pending: false, value: null, at: -Infinity, attemptedAt: -Infinity, providers: new Set(), refreshRequested: false };
+      const providers = new Set([...agents.values()].filter(({ agent }) => agent.cwd === cwd).map(({ agent }) => agent.provider));
+      const gainedProvider = directory.providers.size > 0 && [...providers].some((provider) => !directory.providers.has(provider));
+      directory.providers = providers;
+      const starting = directory.timer === null;
+      if (starting) directory.timer = setInterval(() => { schedule(); void pollFacts(cwd, directory); }, 30000);
       directories.set(cwd, directory);
-      void pollFacts(cwd, directory);
+      if (starting || gainedProvider) void pollFacts(cwd, directory, gainedProvider);
     }
     if (agents.size && usageTimer === null) {
       usageTimer = setInterval(() => { schedule(); void pollUsage(); }, 60000);
@@ -160,27 +173,40 @@ export function createStatusStore(deps: Dependencies): StatusStore {
       usageGeneration++; usagePending = false;
     }
     for (const { agent } of agents.values()) void loadModels(agent.provider);
+    if (agents.size && settingsTimer === null) settingsTimer = setInterval(() => { void pollSettings(); }, 30000);
+    else if (!agents.size && settingsTimer !== null) { clearInterval(settingsTimer); settingsTimer = null; }
   }
 
   function put(agent: AgentRecord) {
     const previous = agents.get(agent.id);
     const running = agent.status === "running";
     const sample: TokenSample = { atMs: deps.now(), input: agent.lastUsage?.inputTokens ?? null, output: agent.lastUsage?.outputTokens ?? null, running };
+    if (previous?.sample && previous.sample.input === sample.input && previous.sample.output === sample.output && previous.sample.running === running) {
+      agents.set(agent.id, { ...previous, agent });
+      return;
+    }
     const result = nextSpeed(previous?.sample ?? null, sample, running);
     agents.set(agent.id, { agent, ...result });
   }
 
-  void deps.readSettings().then((result) => {
-    if (stopped) return;
-    if (result.ok) { settings = result.settings; settingsError = null; }
-    else settingsError = `${result.path}: ${result.reason}`;
-    if (agents.size) schedule();
-  }).catch(() => {
-    if (stopped) return;
-    settingsError = "Unable to read ccstatusline settings";
-    console.error("ccstatusline settings read failed");
-    if (agents.size) schedule();
-  });
+  async function pollSettings() {
+    if (stopped || settingsPending) return;
+    settingsPending = true;
+    try {
+      const result = await deps.readSettings();
+      if (stopped) return;
+      if (result.ok) { settings = result.settings; settingsError = null; }
+      else { settings = null; settingsError = `${result.path}: ${result.reason}`; }
+    } catch {
+      if (stopped) return;
+      settingsError = "Unable to read ccstatusline settings";
+      console.error("ccstatusline settings read failed");
+    } finally {
+      settingsPending = false;
+      if (!stopped && agents.size) schedule();
+    }
+  }
+  void pollSettings();
 
   const store: StatusStore = {
     setAgents(next) {
@@ -212,6 +238,7 @@ export function createStatusStore(deps: Dependencies): StatusStore {
       stopped = true;
       if (notification !== null) clearTimeout(notification);
       if (usageTimer !== null) clearInterval(usageTimer);
+      if (settingsTimer !== null) clearInterval(settingsTimer);
       for (const directory of directories.values()) if (directory.timer !== null) clearInterval(directory.timer);
       directories.clear(); agents.clear(); views.clear(); listeners.clear();
     },
