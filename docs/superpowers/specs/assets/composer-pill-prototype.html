@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Status composer pill prototype</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0c0d0f; color: #e6e6e6; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: #a9abb2; margin: 0 0 16px; max-width: 900px; }
+
+  .switcher { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .switcher button { font: inherit; color: #d6d7db; background: #1d1f23; border: 1px solid #34363c; border-radius: 7px; padding: 7px 12px; cursor: pointer; }
+  .switcher button.on { background: #2d3a55; border-color: #5f87d7; color: #fff; }
+
+  .window { display: grid; grid-template-columns: 180px minmax(0, 1fr); height: 640px; min-width: 1000px; background: #16171a; border: 1px solid #2c2e33; border-radius: 10px; overflow: hidden; }
+  .side { background: #111214; border-right: 1px solid #2c2e33; padding: 14px 10px; }
+  .side h2 { font-size: 12px; color: #a9abb2; font-weight: 500; margin: 8px 6px 6px; }
+  .side .row { padding: 6px 8px; border-radius: 6px; color: #c2c4c9; }
+  .side .row.active { background: #24262b; color: #fff; }
+
+  .main { display: flex; flex-direction: column; min-width: 0; position: relative; }
+  .tabs { display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid #2c2e33; }
+  .tab { padding: 6px 12px; border-radius: 6px 6px 0 0; color: #a9abb2; white-space: nowrap; cursor: pointer; background: none; border: 0; font: inherit; }
+  .tab.active { background: #24262b; color: #fff; }
+  .chat { flex: 1; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; color: #d0d2d7; overflow: hidden; min-height: 0; }
+  .bubble { align-self: flex-end; background: #24262b; padding: 8px 12px; border-radius: 10px; max-width: 80%; }
+  .tool { color: #a9abb2; font-size: 13px; }
+
+  .track { display: flex; gap: 8px; padding: 0 14px 8px; align-items: center; position: relative; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 28px; max-width: 160px; padding: 0 10px; border-radius: 14px; border: 1px solid #34363c; background: #1b1c20; color: #a9abb2; font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer; min-width: 0; }
+  .pill span { overflow: hidden; text-overflow: ellipsis; }
+  .pill i { width: 14px; height: 14px; flex: none; border-radius: 3px; background: linear-gradient(90deg, #ffd700 0 74%, #4a4c52 74% 100%); }
+  .pill.tasks i { background: #6d6f76; }
+  .pill.lit { background: #2a2c31; border-color: #5f87d7; }
+
+  .composer { margin: 0 14px 14px; border: 1px solid #2c2e33; border-radius: 10px; padding: 14px 12px; color: #a9abb2; }
+
+  .tooltip { position: absolute; left: 14px; bottom: 112px; background: #26282d; border: 1px solid #3b3d44; border-radius: 7px; padding: 8px 10px; color: #f0f0f2; font-size: 13px; line-height: 1.55; white-space: pre; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+
+  .popover { position: absolute; left: 14px; bottom: 116px; background: #1c1d21; border: 1px solid #3b3d44; border-radius: 10px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.5); max-width: calc(100% - 28px); }
+  .popover header { display: flex; justify-content: space-between; gap: 24px; color: #fff; font-weight: 600; margin-bottom: 8px; }
+  .popover header small { color: #a9abb2; font-weight: 400; font-size: 12px; }
+  .line { display: flex; flex-wrap: wrap; row-gap: 3px; margin-bottom: 3px; }
+  .line:last-child { margin-bottom: 0; }
+  .seg { font: 12px/20px ui-monospace, Menlo, monospace; padding: 0 12px 0 8px; margin-right: -5px; white-space: nowrap;
+         clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%, 6px 50%); }
+  .seg:first-child { clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%); }
+  .c131 { background: #af5f5f; color: #fff; }
+  .c220 { background: #ffd700; color: #000; }
+  .c68  { background: #5f87d7; color: #fff; }
+  .c108 { background: #87af87; color: #000; }
+  .c176 { background: #d787d7; color: #000; }
+  .est { font-style: italic; }
+
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <h1>Status in a composer pill</h1>
+  <p class="sub">Click the buttons below, or use the mockup itself: hover the status pill, press it, or change the agent tab. The Claude text and colors come from a real ccstatusline run. The Codex values are made-up samples.</p>
+
+  <div class="switcher">
+    <button type="button" data-state="idle" class="on">1. Normal</button>
+    <button type="button" data-state="hover">2. Hover: plain text</button>
+    <button type="button" data-state="press">3. Press: full view</button>
+  </div>
+
+  <div class="window">
+    <div class="side">
+      <h2>paseo</h2>
+      <div class="row active">main</div>
+      <div class="row">fix-terminal-grid</div>
+    </div>
+    <div class="main">
+      <div class="tabs">
+        <button type="button" class="tab active" data-agent="claude">Claude: status plugin</button>
+        <button type="button" class="tab" data-agent="codex">Codex: review</button>
+      </div>
+
+      <div class="chat" data-for="claude">
+        <div class="bubble">Put the status line in a composer pill.</div>
+        <div>The pill belongs to this agent, so it changes when you change tabs.</div>
+        <div class="tool">Read packages/app/src/plugins/buttons/view.tsx</div>
+      </div>
+      <div class="chat" data-for="codex" hidden>
+        <div class="bubble">Review the last commit.</div>
+        <div>The review found no blocking problems.</div>
+      </div>
+
+      <div class="track">
+        <button type="button" class="pill tasks"><i></i><span>2 tasks</span></button>
+        <button type="button" class="pill" id="statuspill" title="Context, 5-hour usage, weekly usage"><i></i><span id="pilltext">74% · 63% · 39%</span></button>
+      </div>
+
+      <div class="tooltip" id="tip" hidden></div>
+
+      <div class="popover" id="pop" hidden>
+        <header><span id="poptitle">Claude: status plugin</span><small>Press outside to close</small></header>
+        <div data-for="claude">
+          <div class="line"><span class="seg c131">Model: Opus 5.5</span><span class="seg c220">Context: [████████████░░░░] 147k/200k (74%)</span><span class="seg c68">⎇ main</span></div>
+          <div class="line"><span class="seg c131">cwd: /Volumes/WDSN580/src/paseo-work/paseo</span><span class="seg c220">Mem: 7.1G/16.0G</span></div>
+          <div class="line"><span class="seg c131">Cached: 2.8M</span><span class="seg c220">In: 52</span><span class="seg c68">Out: 22.7k</span><span class="seg c108 est">In: 0.2 t/s</span><span class="seg c176 est">Out: 100.4 t/s</span><span class="seg c131 est">Total: 100.6 t/s</span></div>
+          <div class="line"><span class="seg c131">Reset: 2hr 27m</span><span class="seg c220">5h: 63.0%</span><span class="seg c68">Weekly Reset: 4d 20hr 7m</span><span class="seg c108">Weekly: 39.0%</span></div>
+          <div class="line"><span class="seg c131">Thinking: high</span><span class="seg c220">Skill: superpowers:brainstorming</span><span class="seg c68">Style: simple-english</span></div>
+        </div>
+        <div data-for="codex" hidden>
+          <div class="line"><span class="seg c131">Model: gpt-5.5</span><span class="seg c220">Context: [█████░░░░░░░░░░░] 82k/258k (32%)</span><span class="seg c68">⎇ main</span></div>
+          <div class="line"><span class="seg c131">cwd: /Volumes/WDSN580/src/paseo-work/paseo</span><span class="seg c220">Mem: 7.1G/16.0G</span></div>
+          <div class="line"><span class="seg c131">Cached: 410k</span><span class="seg c220">In: 12.4k</span><span class="seg c68">Out: 6.1k</span></div>
+          <div class="line"><span class="seg c131">Reset: 3hr 12m</span><span class="seg c220">5h: 18.0%</span><span class="seg c68">Weekly Reset: 2d 4hr</span><span class="seg c108">Weekly: 22.0%</span></div>
+          <div class="line"><span class="seg c131">Thinking: medium</span></div>
+        </div>
+      </div>
+
+      <div class="composer">Message the agent...</div>
+    </div>
+  </div>
+
+<script>
+  var AGENTS = {
+    claude: {
+      title: 'Claude: status plugin',
+      pill: '74% · 63% · 39%',
+      fill: 74,
+      tip: 'Model: Opus 5.5 | Context: 147k/200k (74%) | main\ncwd: /Volumes/WDSN580/src/paseo-work/paseo | Mem: 7.1G/16.0G\nCached: 2.8M | In: 52 | Out: 22.7k | In: 0.2 t/s | Out: 100.4 t/s | Total: 100.6 t/s\nReset: 2hr 27m | 5h: 63.0% | Weekly Reset: 4d 20hr 7m | Weekly: 39.0%\nThinking: high | Skill: superpowers:brainstorming | Style: simple-english'
+    },
+    codex: {
+      title: 'Codex: review',
+      pill: '32% · 18% · 22%',
+      fill: 32,
+      tip: 'Model: gpt-5.5 | Context: 82k/258k (32%) | main\ncwd: /Volumes/WDSN580/src/paseo-work/paseo | Mem: 7.1G/16.0G\nCached: 410k | In: 12.4k | Out: 6.1k\nReset: 3hr 12m | 5h: 18.0% | Weekly Reset: 2d 4hr | Weekly: 22.0%\nThinking: medium'
+    }
+  };
+  var agent = 'claude';
+  var state = 'idle';
+  var pinned = false;
+  var pill = document.getElementById('statuspill');
+  var tip = document.getElementById('tip');
+  var pop = document.getElementById('pop');
+
+  function render() {
+    var a = AGENTS[agent];
+    document.getElementById('pilltext').textContent = a.pill;
+    document.getElementById('poptitle').textContent = a.title;
+    pill.querySelector('i').style.background = 'linear-gradient(90deg, #ffd700 0 ' + a.fill + '%, #4a4c52 ' + a.fill + '% 100%)';
+    tip.textContent = a.tip;
+    tip.hidden = state !== 'hover';
+    pop.hidden = state !== 'press';
+    pill.classList.toggle('lit', state !== 'idle');
+    document.querySelectorAll('[data-for]').forEach(function (el) { el.hidden = el.getAttribute('data-for') !== agent; });
+    document.querySelectorAll('.tab').forEach(function (el) { el.classList.toggle('active', el.getAttribute('data-agent') === agent); });
+    document.querySelectorAll('.switcher button').forEach(function (el) { el.classList.toggle('on', el.getAttribute('data-state') === state); });
+  }
+
+  document.querySelectorAll('.switcher button').forEach(function (el) {
+    el.addEventListener('click', function () { state = el.getAttribute('data-state'); pinned = state === 'hover'; render(); });
+  });
+  document.querySelectorAll('.tab').forEach(function (el) {
+    el.addEventListener('click', function () { agent = el.getAttribute('data-agent'); render(); });
+  });
+  pill.addEventListener('mouseenter', function () { if (state !== 'press') { state = 'hover'; pinned = false; render(); } });
+  pill.addEventListener('mouseleave', function () { if (state === 'hover' && !pinned) { state = 'idle'; render(); } });
+  pill.addEventListener('click', function (e) { e.stopPropagation(); pinned = false; state = state === 'press' ? 'idle' : 'press'; render(); });
+  document.querySelector('.chat').addEventListener('click', function () { if (state === 'press') { state = 'idle'; render(); } });
+  render();
+</script>
+</body>
+</html>
