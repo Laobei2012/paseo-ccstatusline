@@ -4,8 +4,9 @@ import { expect, it, vi } from "vitest";
 import { createStatusPopover } from "../client/popover";
 import { SegmentRow } from "../client/segment-row";
 import type { StatusStore } from "../client/store";
+import { createViewModeStore } from "../client/view-mode";
 
-vi.mock("react-native", () => ({ Text: "Text", View: "View" }));
+vi.mock("react-native", () => ({ Text: "Text", View: "View", Pressable: "Pressable" }));
 vi.mock("@getpaseo/plugin/client/ui", () => ({ ScrollView: "ScrollView" }));
 vi.mock("react", async (importOriginal) => ({
   ...await importOriginal<typeof import("react")>(),
@@ -24,7 +25,10 @@ it("puts every status row in one horizontal scroller and keeps explanatory text 
     hiddenTypes: ["skills"], lines, powerline: true, globalBold: false,
   }) } as unknown as StatusStore;
   const Popover = createStatusPopover(store);
-  const tree = Popover({ context: "agent", agentId: "agent", workspaceId: "workspace",
+  const mode = createViewModeStore();
+  mode.setMode("colored");
+  const ColoredPopover = createStatusPopover(store, mode);
+  const tree = ColoredPopover({ context: "agent", agentId: "agent", workspaceId: "workspace",
     theme: { colors: { foreground: "#fff", foregroundMuted: "#aaa", statusDanger: "#f00" } },
   } as unknown as PluginButtonContentProps);
   const scrollers: object[] = [];
@@ -51,7 +55,39 @@ it("puts every status row in one horizontal scroller and keeps explanatory text 
   expect(rows.map((row) => row.segments)).toEqual([lines[0], lines[2]]);
   for (const row of rows) expect(row.scrollers).toEqual(scrollers);
   expect(explanations.map((item) => item.text)).toEqual([
-    "Test agent", "Usage: Test account", "Settings error", "Hidden widgets: skills",
+    "Test agent", "Usage: Test account", "Text", "Colored", "Settings error", "Hidden widgets: skills",
   ]);
   for (const explanation of explanations) expect(explanation.scrollers).toEqual([]);
+});
+
+it("uses the last selected mode when hover and press content remount", () => {
+  const modes = createViewModeStore();
+  const store = { subscribe: vi.fn(), getView: () => ({
+    lines: [[{ text: "Model", estimate: false }]], hiddenTypes: [],
+  }) } as unknown as StatusStore;
+  const props = { context: "agent", agentId: "agent", workspaceId: "workspace",
+    theme: { colors: { foreground: "#fff", foregroundMuted: "#aaa", surface2: "#222" } },
+  } as unknown as PluginButtonContentProps;
+  function descendants(node: ReactNode): ReturnType<typeof Children.toArray> {
+    return Children.toArray(node).flatMap((child) => {
+      if (!isValidElement<{ children?: ReactNode }>(child)) return [child];
+      return [child, ...descendants(child.props.children)];
+    });
+  }
+  function controls(node: ReactNode) {
+    return descendants(node).filter((child) => isValidElement(child) && child.type === "Pressable");
+  }
+  const first = createStatusPopover(store, modes)(props);
+  expect(descendants(first).filter((child) => isValidElement(child) && child.type === SegmentRow)).toHaveLength(0);
+  const colored = controls(first)[1];
+  expect(isValidElement<{ onPress(): void }>(colored)).toBe(true);
+  if (!isValidElement<{ onPress(): void }>(colored)) throw new Error("Missing Colored selector");
+  colored.props.onPress();
+  const reopened = createStatusPopover(store, modes)(props);
+  expect(descendants(reopened).filter((child) => isValidElement(child) && child.type === SegmentRow)).toHaveLength(1);
+  const text = controls(reopened)[0];
+  if (!isValidElement<{ onPress(): void }>(text)) throw new Error("Missing Text selector");
+  text.props.onPress();
+  const again = createStatusPopover(store, modes)(props);
+  expect(descendants(again).filter((child) => isValidElement(child) && child.type === SegmentRow)).toHaveLength(0);
 });
