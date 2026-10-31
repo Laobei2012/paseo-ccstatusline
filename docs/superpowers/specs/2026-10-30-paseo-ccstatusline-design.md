@@ -11,7 +11,7 @@ The approved interaction is in `assets/composer-pill-prototype.html`. Open that 
 ## Goals
 
 1. Show a composer pill for each agent, with three numbers: context, 5-hour usage and weekly usage.
-2. If the user hovers over the pill, show all configured status lines as plain text.
+2. If the user hovers over the pill, show all configured status lines using the last selected text or colored view. This follow-up requirement is pending a public host API extension; the current implementation still shows plain text.
 3. If the user presses the pill, show all configured status lines with colors.
 4. Use the line order, widget order and colors from `~/.config/ccstatusline/settings.json` on the daemon machine.
 5. Work for every provider. A value that a provider does not report must not stop the rest of the view.
@@ -58,6 +58,8 @@ The custom icon draws a small horizontal bar that shows context use. Draw to the
 The pill behavior is `popover`.
 
 ### Hover
+
+Follow-up from Simon's visual feedback: hover must remember the last selected text or colored view. The plain-text behavior below describes the current implementation, not completion of that requirement. Neither the pinned 0.14.0 SDK nor the deployed plugin contract exposes custom hover content. See `../drafts/paseo-hover-content-discussion.md` for the dependency, proposed API, exact host files and acceptance checks. Host implementation remains outside this plugin task.
 
 The `title` holds one plain text row for each configured line. Segments in a row are separated by ` | `. The rows use the same hidden-widget rules as the popover.
 
