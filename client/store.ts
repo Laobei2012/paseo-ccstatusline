@@ -1,4 +1,4 @@
-import type { PaseoAgent, PaseoProviderModelsResult, PaseoProviderUsageResult } from "@getpaseo/client";
+import type { AgentSnapshotPayload as PaseoAgent, ListProviderModelsResponseMessage, ProviderUsageListResponseMessage } from "@getpaseo/protocol/messages";
 import type { AgentFacts } from "../shared/facts";
 import type { FactsOutput, SettingsOutput } from "../shared/rpc";
 import type { StatusSettings } from "../shared/settings";
@@ -7,6 +7,9 @@ import { contextPercent, pillLabel } from "../shared/summary";
 import { selectUsage } from "../shared/usage";
 import { lastSkill, type TimelineItem } from "../shared/skills";
 import { buildLines, hoverText, type Segment } from "../shared/widgets";
+
+type PaseoProviderModelsResult = ListProviderModelsResponseMessage["payload"];
+type PaseoProviderUsageResult = ProviderUsageListResponseMessage["payload"];
 
 export type AgentRecord = Pick<PaseoAgent, "id" | "cwd" | "provider" | "workspaceId" | "model" | "status" |
   "archivedAt" | "lastUsage" | "runtimeInfo" | "thinkingOptionId"> & { title?: string | null };

@@ -1,6 +1,6 @@
-import type { PaseoAgentTimelineHandle } from "@getpaseo/client";
+import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
 
-export type TimelineItem = Awaited<ReturnType<PaseoAgentTimelineHandle["refetch"]>>["entries"][number]["item"];
+export type TimelineItem = AgentTimelineItem;
 
 // Recent pages are ordered from oldest to newest.
 export function lastSkill(items: TimelineItem[], provider: string): string | null {
