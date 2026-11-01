@@ -2,6 +2,12 @@
 
 The first release is prepared as **0.1.0**. No npm publication, GitHub release or marketplace submission is triggered automatically by this repository.
 
+## Agent-scoped usage branch
+
+The agent-usage migration requires the proposed `agents.ref(id).listUsageReports()` API and `agentUsageRevision` capability for account usage. Its manifest accepts stable Paseo versions from 0.14.0 and the 0.15.0 beta line used for local verification. This does not claim that a published version includes the API: older hosts/apps keep other widgets working and hide account usage. Before publishing the migration, link the introducing Paseo release and verify both daemon and app support it. Keep the published 0.14.0 development dependencies until the new SDK is released; the optional-method bridge must then be checked against that release.
+
+The checks and submission details below describe the original 0.1.0 release preparation, not evidence for the account-switch migration.
+
 ## Validate the artifact
 
 From a clean checkout of the release revision:
