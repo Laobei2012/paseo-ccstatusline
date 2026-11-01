@@ -1,21 +1,29 @@
 import type { PluginButtonContentProps } from "@getpaseo/plugin/client";
 import { ScrollView } from "@getpaseo/plugin/client/ui";
-import { useEffect, useSyncExternalStore } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { Platform, Pressable, Text, View, type ScrollView as NativeScrollView } from "react-native";
 import { SegmentRow } from "./segment-row";
 import type { StatusStore } from "./store";
 import { createViewModeStore } from "./view-mode";
+import { attachWheelScroll, type HorizontalViewport, type WheelPanel } from "./wheel-scroll";
 
 const viewModes = ["text", "colored"] as const;
 
 export function createStatusPopover(store: StatusStore, modes = createViewModeStore()) {
   return function StatusPopover(props: PluginButtonContentProps) {
+    const panelRef = useRef<View>(null);
+    const rowsRef = useRef<NativeScrollView>(null);
+    useEffect(() => {
+      if (Platform.OS !== "web" || !panelRef.current || !rowsRef.current) return;
+      const viewport = rowsRef.current.getScrollableNode() as HorizontalViewport | null;
+      if (viewport) return attachWheelScroll(panelRef.current as unknown as WheelPanel, viewport);
+    }, []);
     const agentId = props.context === "agent" ? props.agentId : "";
     const view = useSyncExternalStore(store.subscribe, () => store.getView(agentId));
     const mode = useSyncExternalStore(modes.subscribe, modes.getSnapshot);
     useEffect(() => store.openPopover(agentId), [agentId]);
     const colors = props.theme.colors;
-    return <View style={{ maxWidth: "100%", flexShrink: 1, gap: 8 }}>
+    return <View ref={panelRef} style={{ maxWidth: "100%", flexShrink: 1, gap: 8 }}>
       <Text accessibilityRole="header" style={{ color: colors.foreground, fontWeight: "600", fontSize: 14 }}>
         {view?.agentTitle || "Agent status"}
       </Text>
@@ -33,7 +41,7 @@ export function createStatusPopover(store: StatusStore, modes = createViewModeSt
         </Pressable>)}
       </View>
       {view?.settingsError ? <Text style={{ color: colors.statusDanger, fontSize: 12 }}>{view.settingsError}</Text> : null}
-      <ScrollView testID="ccstatusline-rows" horizontal style={{ maxWidth: "100%" }}>
+      <ScrollView ref={rowsRef} testID="ccstatusline-rows" horizontal style={{ maxWidth: "100%" }}>
         <View style={{ gap: 6, alignItems: "flex-start" }}>
           {view?.lines.map((segments, index) => {
             if (!segments.length) return null;

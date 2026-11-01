@@ -11,6 +11,7 @@ vi.mock("@getpaseo/plugin/client/ui", () => ({ ScrollView: "ScrollView" }));
 vi.mock("react", async (importOriginal) => ({
   ...await importOriginal<typeof import("react")>(),
   useEffect: () => {},
+  useRef: () => ({ current: null }),
   useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
 }));
 

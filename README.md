@@ -2,7 +2,7 @@
 
 Shows ccstatusline-style status information in Paseo agent composer pills. Requires Paseo 0.14.0 and uses its standard plugin APIs; no local Paseo host patches are required.
 
-Click a status pill to open the Text/Colored view. The selected view is remembered until the plugin or app reloads. Long rows share horizontal scrolling.
+Click a status pill to open the Text/Colored view. The selected view is remembered until the plugin or app reloads. Long rows share horizontal scrolling. With the pointer inside the popup, roll the mouse wheel down to move right or up to move left. Horizontal trackpad scrolling also works.
 
 ## Known issues on the standard host
 
