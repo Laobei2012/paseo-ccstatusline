@@ -1,0 +1,130 @@
+From 1fd437839d12937f10e703a253a263e4e08981b0 Mon Sep 17 00:00:00 2001
+From: simon <bigplum@gmail.com>
+Date: Sat, 31 Oct 2026 14:07:40 -0700
+Subject: [PATCH 4/4] feat: expose agent-attributed usage reports in client SDK
+
+---
+ packages/client/src/index.test.ts | 39 +++++++++++++++++++++++++++++++
+ packages/client/src/index.ts      |  5 ++++
+ public-docs/sdk/reference.md      | 25 ++++++++++----------
+ 3 files changed, 57 insertions(+), 12 deletions(-)
+
+diff --git a/packages/client/src/index.test.ts b/packages/client/src/index.test.ts
+index 1b11a3032..0a90131a1 100644
+--- a/packages/client/src/index.test.ts
++++ b/packages/client/src/index.test.ts
+@@ -1508,6 +1508,45 @@ test("provider usage requires the advertised host capability", async () => {
+   await client.close();
+ });
+ 
++test("agent usage reports preserve daemon attribution and account metadata", async () => {
++  const { client, ws } = await connectClient({ usageSources: true });
++  const result = client.providers.listUsageReports({ agentId: "agent-a", requestId: "scoped" });
++  expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
++    type: "usage.list_reports.request",
++    agentId: "agent-a",
++    requestId: "scoped",
++  });
++  const report = {
++    id: "codex:account-a",
++    sourceId: "codex",
++    sourceLabel: "Codex",
++    account: { label: "Account A" },
++    fetchedAt: "2026-10-31T00:00:00.000Z",
++    report: { status: "available", windows: [{ id: "five_hour", label: "Session", usedPct: 42 }] },
++  };
++  ws.message(
++    sessionMessage({ type: "usage.list_reports.update", payload: { requestId: "scoped", report } }),
++  );
++  ws.message(
++    sessionMessage({
++      type: "usage.list_reports.response",
++      payload: { requestId: "scoped", error: null },
++    }),
++  );
++  await expect(result).resolves.toEqual({ requestId: "scoped", reports: [report] });
++  await client.close();
++});
++
++test("agent usage reports stay empty on legacy hosts without agent attribution", async () => {
++  const { client, ws } = await connectClient({ providerUsageList: true });
++  const count = ws.sent.length;
++  await expect(client.providers.listUsageReports({ agentId: "agent-a" })).resolves.toMatchObject({
++    reports: [],
++  });
++  expect(ws.sent).toHaveLength(count);
++  await client.close();
++});
++
+ test("config actions delegate to existing daemon config RPCs", async () => {
+   const { client, ws } = await connectClient();
+ 
+diff --git a/packages/client/src/index.ts b/packages/client/src/index.ts
+index 1437068f9..1e66d13ea 100644
+--- a/packages/client/src/index.ts
++++ b/packages/client/src/index.ts
+@@ -430,6 +430,8 @@ export type PaseoProviderSnapshotUpdate = Extract<
+ export type PaseoProviderRefreshResult = RefreshProvidersSnapshotResponseMessage["payload"];
+ export type PaseoProviderDiagnosticResult = ProviderDiagnosticResponseMessage["payload"];
+ export type PaseoProviderUsageResult = ProviderUsageListResponseMessage["payload"];
++export type PaseoUsageReportsResult = Awaited<ReturnType<DaemonClient["listUsageReports"]>>;
++export type PaseoUsageReportsOptions = NonNullable<Parameters<DaemonClient["listUsageReports"]>[0]>;
+ export interface PaseoProviderUsageOptions {
+   requestId?: string;
+ }
+@@ -472,6 +474,8 @@ export interface PaseoProviderActions {
+     options?: { requestId?: string },
+   ): Promise<PaseoProviderDiagnosticResult>;
+   listUsage(options?: PaseoProviderUsageOptions): Promise<PaseoProviderUsageResult>;
++  /** With agentId, returns only reports attributed to that agent by the daemon. */
++  listUsageReports(options?: PaseoUsageReportsOptions): Promise<PaseoUsageReportsResult>;
+   subscribe(handler: (update: PaseoProviderSnapshotUpdate) => void): () => void;
+ }
+ 
+@@ -787,6 +791,7 @@ export function createPaseoApi(
+       refresh: (options) => daemonClient.refreshProvidersSnapshot(options),
+       diagnostic: (provider, options) => daemonClient.getProviderDiagnostic(provider, options),
+       listUsage: (options) => listProviderUsage(daemonClient, options),
++      listUsageReports: (options) => daemonClient.listUsageReports(options),
+       subscribe: (handler) => {
+         return subscribeEvent("providers_snapshot_update", (message) => {
+           if (message.type === "providers_snapshot_update") handler(message.payload);
+diff --git a/public-docs/sdk/reference.md b/public-docs/sdk/reference.md
+index 2867261c3..b8c442a6b 100644
+--- a/public-docs/sdk/reference.md
++++ b/public-docs/sdk/reference.md
+@@ -187,18 +187,19 @@ Use `workspace.terminals.create(options?)` and `workspace.terminals.list(options
+ 
+ ## `client.providers`
+ 
+-| Method                           | Result                        | Behavior                                                                                                                                                 |
+-| -------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+-| `waitForReady(options?)`         | `PaseoProviderSnapshotResult` | Waits until no provider is loading. Default timeout: 60 seconds. Rejects with an update-host error when the daemon cannot correlate workspace snapshots. |
+-| `snapshot(options?)`             | `PaseoProviderSnapshotResult` | Returns the current catalog immediately.                                                                                                                 |
+-| `refresh(options?)`              | Acknowledgement               | Forces catalog refresh for all or selected providers.                                                                                                    |
+-| `listAvailable()`                | Availability result           | Reports installed provider availability.                                                                                                                 |
+-| `listModels(provider, options?)` | Models result                 | Discovers models for one provider and directory.                                                                                                         |
+-| `listModes(provider, options?)`  | Modes result                  | Discovers permission or operating modes.                                                                                                                 |
+-| `listFeatures(draftConfig)`      | Features result               | Discovers features for the current draft provider configuration.                                                                                         |
+-| `diagnostic(provider)`           | Diagnostic result             | Returns human-readable setup diagnostics.                                                                                                                |
+-| `listUsage(options?)`            | `PaseoProviderUsageResult`    | Returns normalized subscription windows, balances, and provider details. Rejects with an update-host error when unsupported. Options: `requestId`.       |
+-| `subscribe(handler)`             | Unsubscribe function          | Requests future catalog updates; unsubscribe releases demand.                                                                                            |
++| Method                           | Result                        | Behavior                                                                                                                                                                                                                                                                     |
++| -------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
++| `waitForReady(options?)`         | `PaseoProviderSnapshotResult` | Waits until no provider is loading. Default timeout: 60 seconds. Rejects with an update-host error when the daemon cannot correlate workspace snapshots.                                                                                                                     |
++| `snapshot(options?)`             | `PaseoProviderSnapshotResult` | Returns the current catalog immediately.                                                                                                                                                                                                                                     |
++| `refresh(options?)`              | Acknowledgement               | Forces catalog refresh for all or selected providers.                                                                                                                                                                                                                        |
++| `listAvailable()`                | Availability result           | Reports installed provider availability.                                                                                                                                                                                                                                     |
++| `listModels(provider, options?)` | Models result                 | Discovers models for one provider and directory.                                                                                                                                                                                                                             |
++| `listModes(provider, options?)`  | Modes result                  | Discovers permission or operating modes.                                                                                                                                                                                                                                     |
++| `listFeatures(draftConfig)`      | Features result               | Discovers features for the current draft provider configuration.                                                                                                                                                                                                             |
++| `diagnostic(provider)`           | Diagnostic result             | Returns human-readable setup diagnostics.                                                                                                                                                                                                                                    |
++| `listUsage(options?)`            | `PaseoProviderUsageResult`    | Returns normalized subscription windows, balances, and provider details. Rejects with an update-host error when unsupported. Options: `requestId`.                                                                                                                           |
++| `listUsageReports(options?)`     | `PaseoUsageReportsResult`     | Returns usage reports with source and account labels. Pass `agentId` to use the daemon's account attribution; legacy hosts without attribution return no agent reports. Options also accept `requestId`, `forceRefresh`, or `reportIds` (mutually exclusive with `agentId`). |
++| `subscribe(handler)`             | Unsubscribe function          | Requests future catalog updates; unsubscribe releases demand.                                                                                                                                                                                                                |
+ 
+ ## `client.config`
+ 
+-- 
+2.50.1 (Apple Git-155)
+
