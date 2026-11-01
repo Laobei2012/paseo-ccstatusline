@@ -1,7 +1,7 @@
 {
   "id": "paseo-ccstatusline",
   "requirements": {
-    "paseo": "0.14.0"
+    "paseo": ">=0.14.0 || >=0.15.0-beta.1 <0.15.0"
   },
   "name": "ccstatusline for Paseo",
   "description": "Shows ccstatusline-style context, provider usage and configurable status rows beside each Paseo agent's composer.",

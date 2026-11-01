@@ -4,7 +4,7 @@ Your [ccstatusline](https://github.com/sirmalloc/ccstatusline) layout, beside ea
 
 ![Colored status panel beside the Paseo composer in dark mode](assets/screenshots/colored-dark.png)
 
-Works with **unmodified Paseo 0.14.0**. Hover shows a plain-text tooltip; click or tap opens the panel. The selected view is shared across agents until the plugin or app reloads.
+Context and status widgets work with **Paseo 0.14.0**. Account usage requires the proposed agent-scoped usage API in both the daemon and app; it is hidden on older versions. Hover shows a plain-text tooltip; click or tap opens the panel. The selected view is shared across agents until the plugin or app reloads.
 
 ## Install
 
@@ -79,10 +79,10 @@ For Claude agents it reads `outputStyle` from project or user Claude settings, a
 
 ## Limits and troubleshooting
 
-- **Usage is provider-wide.** Standard Paseo 0.14.0 cannot attribute usage reports to an individual agent. Multiple matching reports hide usage values. Even a single report, labeled `Usage: …`, may describe a different account from one selected by a routing plugin such as ZeroSub.
+- **Usage follows the agent account.** Usage requires `agents.ref(id).listUsageReports()` and the daemon’s `agentUsageRevision` capability. These APIs are not yet in a published Paseo release. Older hosts/apps show `--` for account usage. Reports describe account quotas, not consumption by this agent alone. Missing, multiple or unavailable reports hide usage values; there is no fallback to host-wide usage. The account label appears as `Usage: …`.
 - **A row is missing.** Rows containing only unavailable values are omitted. There is no four-row limit. Check whether the provider supplies the values and whether the widget is supported.
 - **Tokens and speed.** Token counts come from the agent's latest usage snapshot, not accumulated session totals. Speed estimates require changes between reports and are often unavailable.
-- **Stale facts.** Failed fact and usage refreshes can retain their last good values for up to five minutes. Settings refresh every 30 seconds; usage is polled every 60 seconds.
+- **Refresh behavior.** Facts may retain their last good values for five minutes. Usage is cached per host and agent, polled every 60 seconds, and cleared/refetched on launch revision changes, turn starts, reconnects and panel opening. A failed usage refresh clears its values. Settings refresh every 30 seconds. Switching accounts through a plugin must change the agent’s launch revision or continue in another agent; silently replacing credentials inside a running launch is outside this contract.
 - **No pill.** Confirm the agent belongs to a workspace and `paseo plugin ls` reports the plugin as `running`. Inspect `paseo plugin logs paseo-ccstatusline` for load errors.
 - **Hover is plain text.** Interactive hover controls are unavailable on standard Paseo 0.14.0. Click the pill to select a view.
 
@@ -96,6 +96,8 @@ npm pack --dry-run --ignore-scripts
 ```
 
 Paseo supplies the SDK, React, React Native, TanStack Query and Zod at runtime. Dependencies in this repository are for development; the plugin needs no installation build step.
+
+The development dependencies stay pinned to 0.14.0 until the API ships. `client/agent-usage.ts` contains a temporary optional-method type bridge; it never calls private transport methods. After the upstream release, replace the bridge with the SDK types and raise dependency versions. Keep the manifest minimum at 0.14.0 while older hosts remain supported with account usage hidden. Validate the enabled path against the API branch before release; unit tests alone do not prove a live ZeroSub switch.
 
 See [the release checklist and submission draft](docs/releasing.md). Documents under `docs/superpowers/` record development history, including reverted host API experiments; they are not current installation instructions.
 

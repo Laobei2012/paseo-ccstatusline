@@ -4,13 +4,14 @@ import { reconcilePills, type PillRecord } from "./client/pills";
 import { createStatusStore, type AgentRecord } from "./client/store";
 import { createStatusPopover } from "./client/popover";
 import { factsReadRpc, settingsReadRpc } from "./shared/rpc";
+import { listAgentUsage } from "./client/agent-usage";
 
 export default function contribute(client: PluginClientContext) {
   const lifetime = new AbortController();
   const store = createStatusStore({
     readSettings: () => client.rpc(settingsReadRpc, {}),
     readFacts: (input) => client.rpc(factsReadRpc, input),
-    listUsage: () => client.paseo.providers.listUsage(),
+    listUsageReports: (agentId) => listAgentUsage(client.paseo.agents.ref(agentId)),
     listModels: (provider) => client.paseo.providers.listModels(provider),
     now: () => Date.now(),
     readTimeline: async (agentId) => {
@@ -58,7 +59,7 @@ export default function contribute(client: PluginClientContext) {
         agents.clear();
         removedAgents.clear();
         for (const { agent } of entries) agents.set(agent.id, agent);
-        store.setAgents([...agents.values()]);
+        store.setAgents([...agents.values()], { refreshUsage: true });
         syncPills();
       },
       update: (message) => {
