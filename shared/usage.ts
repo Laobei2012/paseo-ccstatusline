@@ -1,12 +1,10 @@
-import type { PaseoUsageReportsResult } from "@getpaseo/client";
+import type { PaseoProviderUsageResult } from "@getpaseo/client";
 import { type UsageWindow, isNonNegativeNumber } from "./facts";
 
-export type AgentUsageEntry = PaseoUsageReportsResult["reports"][number];
+export type ProviderUsageEntry = PaseoProviderUsageResult["providers"][number];
 
-type AvailableReport = Extract<AgentUsageEntry["report"], { status: "available" }>;
-
-function selectWindow(report: AvailableReport, id: string): UsageWindow | null {
-  const windows = report.windows.filter((window) => window.id === id);
+function selectWindow(entry: ProviderUsageEntry, id: string): UsageWindow | null {
+  const windows = entry.windows.filter((window) => window.id === id);
   if (windows.length !== 1) return null;
   const window = windows[0];
   return {
@@ -15,16 +13,11 @@ function selectWindow(report: AvailableReport, id: string): UsageWindow | null {
   };
 }
 
-/** Entries must come from the daemon's agent-scoped report request. */
-export function selectUsage(entries: AgentUsageEntry[], provider: string): {
-  account: string | null; source: string | null; session: UsageWindow | null; weekly: UsageWindow | null;
+export function selectUsage(entries: ProviderUsageEntry[], provider: string): {
+  account: string | null; session: UsageWindow | null; weekly: UsageWindow | null;
 } {
-  // ZeroSub routing does not identify a native subscription account.
-  const matches = provider === "zerosub" ? [] : entries;
-  if (matches.length !== 1) return { account: null, source: null, session: null, weekly: null };
+  const matches = entries.filter((entry) => entry.providerId === provider);
+  if (matches.length !== 1 || matches[0].status !== "available") return { account: null, session: null, weekly: null };
   const entry = matches[0];
-  const report = entry.report;
-  if (report.status !== "available") return { account: null, source: null, session: null, weekly: null };
-  return { account: entry.account.label || null, source: entry.sourceLabel || null,
-    session: selectWindow(report, "five_hour"), weekly: selectWindow(report, "weekly") };
+  return { account: entry.displayName || null, session: selectWindow(entry, "five_hour"), weekly: selectWindow(entry, "weekly") };
 }

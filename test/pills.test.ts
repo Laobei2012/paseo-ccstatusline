@@ -62,7 +62,8 @@ describe("pill reconciliation", () => {
       await vi.advanceTimersByTimeAsync(1000);
       const icon = add.mock.calls[0][0].button.icon;
       const descriptor = add.mock.calls[0][0].button;
-      expect(descriptor.hover).toEqual({ Content: Reflect.get(descriptor.behavior, "Content") });
+      expect(Reflect.get(descriptor, "hover")).toBeUndefined();
+      expect(descriptor.behavior.kind).toBe("popover");
       observer.snapshot({ entries: [{ agent: agent("new") }] });
       expect(registrations[0].remove).toHaveBeenCalledTimes(1);
       expect(add.mock.calls[1][0].button.icon).toBe(icon);
