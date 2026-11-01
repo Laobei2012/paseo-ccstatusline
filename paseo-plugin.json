@@ -2,5 +2,13 @@
   "id": "paseo-ccstatusline",
   "requirements": {
     "paseo": "0.14.0"
-  }
+  },
+  "name": "ccstatusline for Paseo",
+  "description": "Shows ccstatusline-style context, provider usage and configurable status rows beside each Paseo agent's composer.",
+  "media": [
+    "assets/screenshots/colored-dark.png",
+    "assets/screenshots/text-dark.png",
+    "assets/screenshots/colored-light.png",
+    "assets/screenshots/compact-dark.png"
+  ]
 }

@@ -1,7 +1,7 @@
-import type { PaseoProviderUsageResult } from "@getpaseo/client";
+import type { ProviderUsageListResponseMessage } from "@getpaseo/protocol/messages";
 import { type UsageWindow, isNonNegativeNumber } from "./facts";
 
-export type ProviderUsageEntry = PaseoProviderUsageResult["providers"][number];
+export type ProviderUsageEntry = ProviderUsageListResponseMessage["payload"]["providers"][number];
 
 function selectWindow(entry: ProviderUsageEntry, id: string): UsageWindow | null {
   const windows = entry.windows.filter((window) => window.id === id);
