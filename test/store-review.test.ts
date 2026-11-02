@@ -15,7 +15,7 @@ function setup(failFirstSettings = false, widget = "output-speed") {
     readSettings: vi.fn(async () => ({ ok: true as const, settings: settings(widget), path: "/settings" })),
     readFacts: vi.fn(async ({ provider }: { cwd: string; provider: string }) => ({ branch: null, memory: null, outputStyle: provider === "claude" ? "simple" : null })),
     listModels: vi.fn(async (provider: string) => ({ provider, requestId: "models", fetchedAt: "", models: [] })),
-    listUsage: vi.fn(async () => ({ requestId: "usage", fetchedAt: "", providers: [] })),
+    listUsageReports: vi.fn(async () => ({ requestId: "usage", usageRevision: null, reports: [] })),
     now: () => Date.now(),
     readTimeline: vi.fn(async () => []),
   };

@@ -47,10 +47,10 @@ describe("widget text and segments", () => {
     expect(buildLines(settings, all, now).lines[0][0]).toMatchObject({ fg: "#008787", bg: "#d70000" });
   });
 
-  it("hides negative context counts while keeping other widgets", () => {
+  it("uses a placeholder for invalid context while keeping other widgets", () => {
     const settings = parseSettings({ lines: [[{ type: "context-bar" }, { type: "model" }]] });
     expect(buildLines(settings, { ...all, contextUsed: -5 }, now).lines[0].map((segment) => segment.text))
-      .toEqual(["Model: Opus 5.5"]);
+      .toEqual(["Context: -", "Model: Opus 5.5"]);
   });
 
   it.each(expected)("formats %s", (type, text) => {
@@ -68,11 +68,17 @@ describe("widget text and segments", () => {
     expect(hiddenTypes).toEqual([]);
   });
 
-  it("hides every missing supported value without reporting it as unsupported", () => {
+  it("keeps missing supported rows visible without reporting them as unsupported", () => {
     const result = buildLines(parseSettings(fixture), nothing, now);
-    expect(result.lines).toEqual([[], [], [], [], []]);
+    expect(result.lines.map((line) => line.map((segment) => segment.text))).toEqual([["Model: -", "Context: -", "⎇ -"], ["cwd: -", "Mem: -"], ["Cached: -", "In: -", "Out: -", "In: -", "Out: -", "Total: -"], ["Reset: -", "5h: -", "Weekly Reset: -", "Weekly: -"], ["Thinking: -", "Skill: -", "Style: -"]]);
     expect(result.hiddenTypes).toEqual([]);
-    expect(plainText(result.lines)).toBe("");
+    expect(plainText(result.lines).split("\n")).toHaveLength(5);
+  });
+
+  it("leaves empty and unsupported-only rows hidden", () => {
+    const result = buildLines(parseSettings({ lines: [[], [{ type: "future" }]] }), nothing, now);
+    expect(result.lines).toEqual([[], []]);
+    expect(result.hiddenTypes).toEqual(["future"]);
   });
 
   it("reports unknown types once and keeps their neighbors", () => {
@@ -81,13 +87,13 @@ describe("widget text and segments", () => {
     expect(result.lines[0].map((segment) => segment.text)).toEqual(["Model: Opus 5.5"]);
   });
 
-  it("resets theme slots per row and skips hidden widgets", () => {
+  it("preserves theme slots for missing values", () => {
     const settings = parseSettings({ ...fixture, lines: [[{ type: "git-branch" }, { type: "model" }, { type: "skills" }], [{ type: "thinking-effort" }]] });
     const { lines } = buildLines(settings, { ...all, branch: null }, now);
-    expect(lines[0].map(({ fg, bg }) => ({ fg, bg }))).toEqual([{ fg: "#ffffff", bg: "#af5f5f" }, { fg: "#000000", bg: "#ffd700" }]);
+    expect(lines[0].map(({ fg, bg }) => ({ fg, bg }))).toEqual([{ fg: "#ffffff", bg: "#af5f5f" }, { fg: "#000000", bg: "#ffd700" }, { fg: "#ffffff", bg: "#5f87d7" }]);
     expect(lines[1][0].bg).toBe("#af5f5f");
     settings.powerline.continueThemeAcrossLines = true;
-    expect(buildLines(settings, { ...all, branch: null }, now).lines[1][0].bg).toBe("#5f87d7");
+    expect(buildLines(settings, { ...all, branch: null }, now).lines).toEqual(buildLines(settings, all, now).lines.map((line, i) => i === 0 ? line.map((segment, j) => j === 0 ? { ...segment, text: "⎇ -" } : segment) : line));
   });
 
   it.each([false, true])("uses widget colors with no theme, Powerline enabled=%s", (enabled) => {
@@ -103,8 +109,8 @@ describe("widget text and segments", () => {
   it("clamps context bars and hides invalid numeric values", () => {
     const settings = parseSettings({ lines: [[{ type: "context-bar" }, { type: "tokens-input" }, { type: "output-speed" }]] });
     const { lines } = buildLines(settings, { ...all, contextUsed: 300000, tokens: { ...all.tokens, input: NaN }, speed: { ...all.speed, output: Infinity } }, now);
-    expect(lines[0].map((segment) => segment.text)).toEqual(["Context: [████████████████] 300k/200k (100%)"]);
-    expect(buildLines(settings, { ...nothing, contextUsed: 1, contextMax: 0 }, now).lines[0]).toEqual([]);
+    expect(lines[0].map((segment) => segment.text)).toEqual(["Context: [████████████████] 300k/200k (100%)", "In: -", "Out: -"]);
+    expect(buildLines(settings, { ...nothing, contextUsed: 1, contextMax: 0 }, now).lines[0].map((segment) => segment.text)).toEqual(["Context: -", "In: -", "Out: -"]);
   });
 
   it("formats small and large token, speed and memory magnitudes", () => {
@@ -114,6 +120,6 @@ describe("widget text and segments", () => {
 
   it("hides invalid reset dates and clamps elapsed reset durations to zero", () => {
     const settings = parseSettings({ lines: [[{ type: "reset-timer" }, { type: "weekly-reset-timer" }]] });
-    expect(buildLines(settings, { ...all, session: { usedPct: 0, resetsAt: "invalid" }, weekly: { usedPct: 0, resetsAt: "2020-01-01T00:00:00Z" } }, now).lines[0].map((segment) => segment.text)).toEqual(["Weekly Reset: 0m"]);
+    expect(buildLines(settings, { ...all, session: { usedPct: 0, resetsAt: "invalid" }, weekly: { usedPct: 0, resetsAt: "2020-01-01T00:00:00Z" } }, now).lines[0].map((segment) => segment.text)).toEqual(["Reset: -", "Weekly Reset: 0m"]);
   });
 });

@@ -1,4 +1,5 @@
-import type { AgentSnapshotPayload as PaseoAgent, ListProviderModelsResponseMessage, ProviderUsageListResponseMessage } from "@getpaseo/protocol/messages";
+import type { AgentSnapshotPayload as PaseoAgent, ListProviderModelsResponseMessage } from "@getpaseo/protocol/messages";
+import type { AgentUsageResult } from "./agent-usage";
 import type { AgentFacts } from "../shared/facts";
 import type { FactsOutput, SettingsOutput } from "../shared/rpc";
 import type { StatusSettings } from "../shared/settings";
@@ -9,17 +10,18 @@ import { lastSkill, type TimelineItem } from "../shared/skills";
 import { buildLines, hoverText, type Segment } from "../shared/widgets";
 
 type PaseoProviderModelsResult = ListProviderModelsResponseMessage["payload"];
-type PaseoProviderUsageResult = ProviderUsageListResponseMessage["payload"];
 
 export type AgentRecord = Pick<PaseoAgent, "id" | "cwd" | "provider" | "workspaceId" | "model" | "status" |
-  "archivedAt" | "lastUsage" | "runtimeInfo" | "thinkingOptionId"> & { title?: string | null };
+  "archivedAt" | "lastUsage" | "runtimeInfo" | "thinkingOptionId"> & {
+    title?: string | null; usageRevision?: string | null; lastUserMessageAt?: string | null;
+  };
 export type AgentView = {
   label: string; title: string; usageAccount: string | null; contextPercent: number | null;
   lines: Segment[][]; hiddenTypes: string[]; settingsError: string | null;
   agentTitle: string | null; powerline: boolean; globalBold: boolean;
 };
 export type StatusStore = {
-  setAgents(agents: AgentRecord[]): void;
+  setAgents(agents: AgentRecord[], options?: { refreshUsage?: boolean }): void;
   upsertAgent(agent: AgentRecord): void;
   removeAgent(agentId: string): void;
   getView(agentId: string): AgentView | null;
@@ -30,13 +32,14 @@ export type StatusStore = {
 type Dependencies = {
   readSettings(): Promise<SettingsOutput>;
   readFacts(input: { cwd: string; provider: string }): Promise<FactsOutput>;
-  listUsage(): Promise<PaseoProviderUsageResult>;
+  listUsageReports(agentId: string): Promise<AgentUsageResult>;
   listModels(provider: string): Promise<PaseoProviderModelsResult>;
   now(): number;
   readTimeline(agentId: string): Promise<TimelineItem[]>;
 };
 type Directory = { timer: ReturnType<typeof setInterval> | null; pending: boolean; value: FactsOutput | null; at: number; attemptedAt: number; providers: Set<string>; refreshRequested: boolean };
 type AgentState = { agent: AgentRecord; sample: TokenSample | null; speed: AgentFacts["speed"] };
+type AgentUsage = { value: AgentUsageResult | null; at: number; attemptedAt: number; pending: boolean; timer: ReturnType<typeof setInterval> };
 type OpenPopover = { timer: ReturnType<typeof setInterval>; readers: number; pending: boolean };
 
 export function createStatusStore(deps: Dependencies): StatusStore {
@@ -53,12 +56,8 @@ export function createStatusStore(deps: Dependencies): StatusStore {
   let settingsError: string | null = null;
   let settingsPending = false;
   let settingsTimer: ReturnType<typeof setInterval> | null = null;
-  let usage: PaseoProviderUsageResult | null = null;
-  let usageAt = -Infinity;
-  let usageAttemptedAt = -Infinity;
-  let usageTimer: ReturnType<typeof setInterval> | null = null;
-  let usageGeneration = 0;
-  let usagePending = false;
+  // Each contribution owns one host connection; never share usage across hosts or agents.
+  const usage = new Map<string, AgentUsage>();
   let notification: ReturnType<typeof setTimeout> | null = null;
   let speedExpiry: ReturnType<typeof setTimeout> | null = null;
   let membershipChanged = false;
@@ -68,7 +67,8 @@ export function createStatusStore(deps: Dependencies): StatusStore {
     const { agent, speed } = state;
     const directory = directories.get(agent.cwd);
     const remote = directory && deps.now() - directory.at < 300000 ? directory.value : null;
-    const selected = selectUsage(usage && deps.now() - usageAt < 300000 ? usage.providers : [], agent.provider);
+    const reading = usage.get(agent.id);
+    const selected = selectUsage(reading?.value && deps.now() - reading.at < 300000 ? reading.value.reports : []);
     const model = agent.runtimeInfo?.model ?? agent.model;
     const modelLabel = models.get(agent.provider)?.models?.find((entry) => entry.id === model || entry.aliases?.includes(model ?? ""))?.label ?? model;
     const facts: AgentFacts = {
@@ -138,20 +138,46 @@ export function createStatusStore(deps: Dependencies): StatusStore {
     }
   }
 
-  async function pollUsage() {
-    if (stopped || usagePending || agents.size === 0 || deps.now() - usageAttemptedAt < 60000) return;
-    const generation = usageGeneration;
-    usagePending = true;
-    usageAttemptedAt = deps.now();
+  function removeUsage(id: string) {
+    const current = usage.get(id);
+    if (current) clearInterval(current.timer);
+    usage.delete(id);
+  }
+
+  function resetUsage(id: string) {
+    removeUsage(id);
+    const current: AgentUsage = {
+      value: null, at: -Infinity, attemptedAt: -Infinity, pending: false,
+      timer: setInterval(() => { schedule(); void pollUsage(id); }, 60000),
+    };
+    usage.set(id, current);
+    // Attribution changes bypass the normal presentation throttle so old account
+    // numbers disappear even if the replacement request remains pending.
+    if (views.has(id)) {
+      views.set(id, buildView(agents.get(id)!));
+      for (const listener of listeners) listener();
+    }
+    void pollUsage(id);
+  }
+
+  async function pollUsage(id: string, force = false) {
+    const current = usage.get(id);
+    const revision = agents.get(id)?.agent.usageRevision;
+    if (stopped || !current || current.pending || !revision || (!force && deps.now() - current.attemptedAt < 60000)) return;
+    current.pending = true;
+    current.attemptedAt = deps.now();
     try {
-      const value = await deps.listUsage();
-      if (stopped || generation !== usageGeneration) return;
-      usage = value;
-      usageAt = deps.now();
+      const value = await deps.listUsageReports(id);
+      if (stopped || usage.get(id) !== current) return;
+      // A response may finish before the matching agent update reaches this client.
+      current.value = value.usageRevision === revision ? value : null;
+      current.at = deps.now();
     } catch {
-      if (!stopped && generation === usageGeneration) console.error("ccstatusline usage refresh failed");
+      if (stopped || usage.get(id) !== current) return;
+      current.value = null;
+      console.error("ccstatusline agent usage refresh failed");
     } finally {
-      if (!stopped && generation === usageGeneration) { usagePending = false; schedule(); }
+      if (!stopped && usage.get(id) === current) { current.pending = false; schedule(); }
     }
   }
 
@@ -186,28 +212,27 @@ export function createStatusStore(deps: Dependencies): StatusStore {
       directories.set(cwd, directory);
       if (starting || gainedProvider) void pollFacts(cwd, directory, gainedProvider);
     }
-    if (agents.size && usageTimer === null) {
-      usageTimer = setInterval(() => { schedule(); void pollUsage(); }, 60000);
-      void pollUsage();
-    } else if (!agents.size && usageTimer !== null) {
-      clearInterval(usageTimer); usageTimer = null;
-      usageGeneration++; usagePending = false;
-    }
     for (const { agent } of agents.values()) void loadModels(agent.provider);
     if (agents.size && settingsTimer === null) settingsTimer = setInterval(() => { void pollSettings(); }, 30000);
     else if (!agents.size && settingsTimer !== null) { clearInterval(settingsTimer); settingsTimer = null; }
   }
 
-  function put(agent: AgentRecord) {
+  function put(agent: AgentRecord, refreshUsage = false) {
     const previous = agents.get(agent.id);
     const running = agent.status === "running";
+    const previousAgent = previous?.agent;
+    const changedUsage = refreshUsage || !previousAgent || previousAgent.usageRevision !== agent.usageRevision ||
+      previousAgent.provider !== agent.provider || previousAgent.runtimeInfo?.sessionId !== agent.runtimeInfo?.sessionId ||
+      previousAgent.lastUserMessageAt !== agent.lastUserMessageAt || (running && previousAgent.status !== "running");
     const sample: TokenSample = { atMs: deps.now(), input: agent.lastUsage?.inputTokens ?? null, output: agent.lastUsage?.outputTokens ?? null, running };
     if (previous?.sample && previous.sample.input === sample.input && previous.sample.output === sample.output && previous.sample.running === running) {
       agents.set(agent.id, { ...previous, agent });
+      if (changedUsage) resetUsage(agent.id);
       return;
     }
     const result = nextSpeed(previous?.sample ?? null, sample, running);
     agents.set(agent.id, { agent, ...result });
+    if (changedUsage) resetUsage(agent.id);
   }
 
   async function pollSettings() {
@@ -235,7 +260,7 @@ export function createStatusStore(deps: Dependencies): StatusStore {
     void pollSettings();
     const directory = directories.get(state.agent.cwd);
     if (directory) void pollFacts(state.agent.cwd, directory, true);
-    void pollUsage();
+    void pollUsage(id);
     schedule();
     if (popover.pending || state.agent.provider !== "claude") return;
     popover.pending = true;
@@ -257,14 +282,14 @@ export function createStatusStore(deps: Dependencies): StatusStore {
   }
 
   const store: StatusStore = {
-    setAgents(next) {
+    setAgents(next, options) {
       if (stopped) return;
       const eligible = next.filter((agent) => agent.workspaceId && !agent.archivedAt);
       const ids = new Set(eligible.map((agent) => agent.id));
-      for (const id of agents.keys()) if (!ids.has(id)) { agents.delete(id); views.delete(id); skills.delete(id); closePopover(id); membershipChanged = true; }
+      for (const id of agents.keys()) if (!ids.has(id)) { agents.delete(id); views.delete(id); skills.delete(id); closePopover(id); removeUsage(id); membershipChanged = true; }
       for (const agent of eligible) {
         if (!agents.has(agent.id)) membershipChanged = true;
-        put(agent);
+        put(agent, options?.refreshUsage);
         if (!views.has(agent.id)) views.set(agent.id, buildView(agents.get(agent.id)!));
       }
       syncPolling(); schedule();
@@ -277,7 +302,7 @@ export function createStatusStore(deps: Dependencies): StatusStore {
     removeAgent(id) {
       if (stopped || !agents.delete(id)) return;
       views.delete(id); membershipChanged = true;
-      skills.delete(id); closePopover(id);
+      skills.delete(id); closePopover(id); removeUsage(id);
       syncPolling(); schedule();
     },
     getView: (id) => views.get(id) ?? null,
@@ -289,6 +314,7 @@ export function createStatusStore(deps: Dependencies): StatusStore {
       else {
         popover = { timer: setInterval(() => { void refreshPopover(id, popover!); }, 5000), readers: 1, pending: false };
         popovers.set(id, popover);
+        void pollUsage(id, true);
         void refreshPopover(id, popover);
       }
       let closed = false;
@@ -303,7 +329,7 @@ export function createStatusStore(deps: Dependencies): StatusStore {
       stopped = true;
       if (notification !== null) clearTimeout(notification);
       if (speedExpiry !== null) clearTimeout(speedExpiry);
-      if (usageTimer !== null) clearInterval(usageTimer);
+      for (const id of usage.keys()) removeUsage(id);
       if (settingsTimer !== null) clearInterval(settingsTimer);
       for (const directory of directories.values()) if (directory.timer !== null) clearInterval(directory.timer);
       for (const id of popovers.keys()) closePopover(id);

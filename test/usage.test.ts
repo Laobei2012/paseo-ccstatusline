@@ -1,36 +1,43 @@
 import { expect, it } from "vitest";
-import { selectUsage, type ProviderUsageEntry } from "../shared/usage";
+import type { UsageReportEntry } from "@getpaseo/protocol/messages";
+import { selectUsage } from "../shared/usage";
 
-const claude: ProviderUsageEntry = {
-  providerId: "claude", displayName: "Claude (example account)", status: "available", planLabel: null,
+const available = {
+  status: "available" as const,
   windows: [
-    { id: "five_hour", label: "Session", shortLabel: "5h", usedPct: 89, resetsAt: "2026-10-31T06:20:00.214429+00:00" },
-    { id: "weekly", label: "Weekly", shortLabel: "wk", usedPct: 41, resetsAt: "2026-11-05T00:00:00.214449+00:00" },
+    { id: "five_hour", label: "Session", usedPct: 89, resetsAt: "2026-10-31T06:20:00Z" },
+    { id: "weekly", label: "Weekly", usedPct: 41, resetsAt: "2026-11-05T00:00:00Z" },
   ],
 };
-const codex: ProviderUsageEntry = { ...claude, providerId: "codex", displayName: "Codex (example account)", windows: [
-  { id: "five_hour", label: "5-hour", shortLabel: "5h", usedPct: 100, resetsAt: "2026-10-31T05:03:20.000Z" },
-  { id: "weekly", label: "Weekly", shortLabel: "wk", usedPct: 59, resetsAt: "2026-11-04T06:41:08.000Z" },
-] };
+const entry: UsageReportEntry = {
+  id: "account-report", sourceId: "routed-source", sourceLabel: "Source",
+  account: { label: "Example account" }, fetchedAt: "", report: available,
+};
 const absent = { account: null, session: null, weekly: null };
 
-it("selects the matching provider, exact windows and reported account name", () => {
-  expect(selectUsage([codex, claude], "claude")).toEqual({ account: claude.displayName, session: { usedPct: 89, resetsAt: claude.windows[0].resetsAt }, weekly: { usedPct: 41, resetsAt: claude.windows[1].resetsAt } });
-  expect(selectUsage([claude, codex], "codex").session?.usedPct).toBe(100);
-  expect(selectUsage([claude], "zerosub")).toEqual(absent);
+it("uses the scoped account and exact windows regardless of source ID", () => {
+  expect(selectUsage([entry])).toEqual({ account: "Example account",
+    session: { usedPct: 89, resetsAt: available.windows[0].resetsAt },
+    weekly: { usedPct: 41, resetsAt: available.windows[1].resetsAt } });
 });
 
-it("hides missing, ambiguous and unavailable reports", () => {
-  expect(selectUsage([], "claude")).toEqual(absent);
-  expect(selectUsage([claude, claude], "claude")).toEqual(absent);
-  expect(selectUsage([{ ...claude, status: "error" }], "claude")).toEqual(absent);
-  expect(selectUsage([{ ...claude, status: "unavailable" }], "claude")).toEqual(absent);
+it("hides missing, ambiguous and unavailable reports without using stale successful data", () => {
+  expect(selectUsage([])).toEqual(absent);
+  expect(selectUsage([entry, entry])).toEqual(absent);
+  expect(selectUsage([{ ...entry, report: { status: "error", error: "offline" },
+    lastSuccessful: { fetchedAt: "", report: available } }])).toEqual(absent);
+  expect(selectUsage([{ ...entry, report: { status: "unavailable", problem: { kind: "rejected", status: 401 } } }])).toEqual(absent);
 });
 
-it("never selects windows by display labels", () => {
-  expect(selectUsage([{ ...claude, windows: [{ ...claude.windows[0], id: "other" }] }], "claude")).toEqual({ account: claude.displayName, session: null, weekly: null });
+it("never selects windows by display labels or chooses among duplicate IDs", () => {
+  expect(selectUsage([{ ...entry, report: { ...available, windows: [{ ...available.windows[0], id: "other" }] } }]))
+    .toEqual({ account: "Example account", session: null, weekly: null });
+  expect(selectUsage([{ ...entry, report: { ...available, windows: [available.windows[0], available.windows[0]] } }]).session).toBeNull();
 });
 
 it("normalizes optional metrics without losing a valid reset or zero percentage", () => {
-  expect(selectUsage([{ ...claude, windows: [{ id: "five_hour", label: "Session", usedPct: 0 }, { id: "weekly", label: "Weekly", usedPct: NaN, resetsAt: "2026-11-05T00:00:00Z" }] }], "claude")).toEqual({ account: claude.displayName, session: { usedPct: 0, resetsAt: null }, weekly: { usedPct: null, resetsAt: "2026-11-05T00:00:00Z" } });
+  expect(selectUsage([{ ...entry, account: {}, report: { ...available, windows: [
+    { id: "five_hour", label: "Session", usedPct: 0 },
+    { id: "weekly", label: "Weekly", usedPct: NaN, resetsAt: "2026-11-05T00:00:00Z" },
+  ] } }])).toEqual({ account: null, session: { usedPct: 0, resetsAt: null }, weekly: { usedPct: null, resetsAt: "2026-11-05T00:00:00Z" } });
 });
