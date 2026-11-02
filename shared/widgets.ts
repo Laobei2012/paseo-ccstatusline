@@ -97,9 +97,11 @@ export function buildLines(settings: StatusSettings, facts: AgentFacts, now: Dat
   const lines = settings.lines.map((line) => {
     if (!settings.powerline.continueThemeAcrossLines) slot = 0;
     const segments: Segment[] = [];
+    let hasMissingValue = false;
     for (const widget of line) {
       const text = widgetText(widget.type, facts, now);
       if (text === undefined) hiddenTypes.add(widget.type);
+      if (text === null) hasMissingValue = true;
       if (text == null) continue;
       const colors = useTheme ? themeColors(settings, slot) : {
         fg: toHex(widget.color ?? defaultColors[widget.type], settings.colorLevel) ?? "#d3d7cf",
@@ -107,6 +109,9 @@ export function buildLines(settings: StatusSettings, facts: AgentFacts, now: Dat
       };
       segments.push({ text, ...colors, estimate: widget.type.endsWith("-speed") });
       slot++;
+    }
+    if (!segments.length && hasMissingValue) {
+      segments.push({ text: "—", fg: "#d3d7cf", bg: null, estimate: false });
     }
     return segments;
   });

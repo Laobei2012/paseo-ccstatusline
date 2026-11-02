@@ -68,11 +68,17 @@ describe("widget text and segments", () => {
     expect(hiddenTypes).toEqual([]);
   });
 
-  it("hides every missing supported value without reporting it as unsupported", () => {
+  it("keeps missing supported rows visible without reporting them as unsupported", () => {
     const result = buildLines(parseSettings(fixture), nothing, now);
-    expect(result.lines).toEqual([[], [], [], [], []]);
+    expect(result.lines.map((line) => line.map((segment) => segment.text))).toEqual([["—"], ["—"], ["—"], ["—"], ["—"]]);
     expect(result.hiddenTypes).toEqual([]);
-    expect(plainText(result.lines)).toBe("");
+    expect(plainText(result.lines)).toBe("—\n—\n—\n—\n—");
+  });
+
+  it("leaves empty and unsupported-only rows hidden", () => {
+    const result = buildLines(parseSettings({ lines: [[], [{ type: "future" }]] }), nothing, now);
+    expect(result.lines).toEqual([[], []]);
+    expect(result.hiddenTypes).toEqual(["future"]);
   });
 
   it("reports unknown types once and keeps their neighbors", () => {
@@ -104,7 +110,7 @@ describe("widget text and segments", () => {
     const settings = parseSettings({ lines: [[{ type: "context-bar" }, { type: "tokens-input" }, { type: "output-speed" }]] });
     const { lines } = buildLines(settings, { ...all, contextUsed: 300000, tokens: { ...all.tokens, input: NaN }, speed: { ...all.speed, output: Infinity } }, now);
     expect(lines[0].map((segment) => segment.text)).toEqual(["Context: [████████████████] 300k/200k (100%)"]);
-    expect(buildLines(settings, { ...nothing, contextUsed: 1, contextMax: 0 }, now).lines[0]).toEqual([]);
+    expect(buildLines(settings, { ...nothing, contextUsed: 1, contextMax: 0 }, now).lines[0].map((segment) => segment.text)).toEqual(["—"]);
   });
 
   it("formats small and large token, speed and memory magnitudes", () => {
