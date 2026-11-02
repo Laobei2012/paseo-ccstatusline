@@ -1,6 +1,6 @@
 # Expose agent-scoped usage reports to plugins
 
-Status: recommendation accepted; API and plugin implementation in progress.
+Status: recommendation accepted. API proposal: [Paseo #8503](https://github.com/getpaseo/paseo/pull/8503). Plugin migration: [ccstatusline #2](https://github.com/Laobei2012/paseo-ccstatusline/pull/2). Neither link implies that the API has shipped in a published release.
 
 ## Problem
 
@@ -36,4 +36,6 @@ The plugin caches usage per host and agent. It clears old attribution and reques
 
 Source inspection of ZeroSub shows two relevant paths: an established Codex task continues in a new or reused account-bound agent, or an eligible same-agent switch reloads the provider session with a selected `CODEX_HOME`. These give either a different agent ID or a new launch revision. A deferred switch must retain the running account until it completes. Merely replacing credentials inside a continuing provider launch is outside this contract.
 
-Live switching needs a separate local integration check; source inspection and unit tests alone do not establish that it works in the installed app. The plugin keeps a small optional-method type bridge against the published 0.14.0 SDK until the new API is released. Older hosts/apps hide account usage and never fall back to the default host account.
+An isolated local integration check with a real Codex app-server, the real Codex usage source and two accounts passed initial attribution, same-agent reload, revision delivery, stale-response rejection, separate continuation attribution and reused continuation refresh. This exercised the real plugin store with SDK responses. The routing hook was a test fixture, not ZeroSub's UI or handoff prompt; browser rendering was not exercised. The same-agent test copied rollouts between temporary account homes, which ZeroSub does not do for Codex. This verifies the API/store behavior without claiming an end-to-end ZeroSub UI switch.
+
+The plugin keeps a small optional-method type bridge against the published 0.14.0 SDK until the new API is released. Older hosts/apps hide account usage and never fall back to the default host account.
