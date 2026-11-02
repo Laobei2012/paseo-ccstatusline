@@ -43,7 +43,7 @@ Set `CCSTATUSLINE_SETTINGS_PATH` in the daemon's environment to use another file
 | --- | --- |
 | ![Text status panel](assets/screenshots/text-dark.png) | ![Colored status panel in light mode](assets/screenshots/colored-light.png) |
 
-The pill reads **context % · 5-hour usage % · weekly usage %**. A missing value appears as `--`. The panel follows your configured row order. A row whose supported widgets all lack data shows `—`; unsupported widget types are listed below the rows.
+The pill reads **context % · 5-hour usage % · weekly usage %**. A missing value appears as `--`. The panel follows your configured row order. Each supported widget keeps its label and shows `-` when its value is unavailable; unsupported widget types are listed below the rows.
 
 Long rows scroll horizontally together. On the web/desktop client, roll the mouse wheel down inside the panel to move right, or up to move left. Horizontal trackpad scrolling also works.
 
@@ -80,7 +80,7 @@ For Claude agents it reads `outputStyle` from project or user Claude settings, a
 ## Limits and troubleshooting
 
 - **Usage follows the agent account.** Usage requires `agents.ref(id).listUsageReports()` and the daemon’s `agentUsageRevision` capability. These APIs are not yet in a published Paseo release. Older hosts/apps show `--` for account usage. Reports describe account quotas, not consumption by this agent alone. Missing, multiple or unavailable reports hide usage values; there is no fallback to host-wide usage. The account label appears as `Usage: …`.
-- **A row is missing.** Rows containing only unavailable supported values show `—`. Empty and unsupported-only rows are omitted. There is no four-row limit. Check whether the provider supplies the values and whether the widget is supported.
+- **A row is missing.** Missing supported values show `-` beside their widget labels. Empty and unsupported-only rows are omitted. There is no four-row limit. Check whether the provider supplies the values and whether the widget is supported.
 - **Tokens and speed.** Token counts come from the agent's latest usage snapshot, not accumulated session totals. Speed estimates require changes between reports and are often unavailable.
 - **Refresh behavior.** Facts may retain their last good values for five minutes. Usage is cached per host and agent, polled every 60 seconds, and cleared/refetched on launch revision changes, turn starts, reconnects and panel opening. A failed usage refresh clears its values. Settings refresh every 30 seconds. Switching accounts through a plugin must change the agent’s launch revision or continue in another agent; silently replacing credentials inside a running launch is outside this contract.
 - **No pill.** Confirm the agent belongs to a workspace and `paseo plugin ls` reports the plugin as `running`. Inspect `paseo plugin logs paseo-ccstatusline` for load errors.

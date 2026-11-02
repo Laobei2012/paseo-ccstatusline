@@ -239,8 +239,8 @@ describe("status store", () => {
     expect(view.label).toBe("74% · 63% · 39%");
     expect(view.contextPercent).toBe(74);
     expect(view.usageAccount).toBe("Primary");
-    expect(view.title).toBe("Usage: Primary\nModel: Friendly model | ⎇ main | Thinking: high | Style: simple");
-    expect(view.title).not.toContain("Skill:");
+    expect(view.title).toBe("Usage: Primary\nModel: Friendly model | ⎇ main | Thinking: high | In: - | Style: simple | Skill: -");
+    expect(view.title).toContain("Skill: -");
   });
 
   it("does not estimate speed across an idle-to-running transition", async () => {
@@ -302,7 +302,7 @@ describe("status store", () => {
     const deps = setup(); store.setAgents([{ ...agent("a"), provider: "codex" }]); await flush();
     const close = store.openPopover("a"); await vi.advanceTimersByTimeAsync(11000);
     expect(deps.readTimeline).not.toHaveBeenCalled();
-    expect(store.getView("a")?.title).not.toContain("Skill:");
+    expect(store.getView("a")?.title).toContain("Skill: -");
     close();
   });
 
