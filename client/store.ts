@@ -160,10 +160,10 @@ export function createStatusStore(deps: Dependencies): StatusStore {
     void pollUsage(id);
   }
 
-  async function pollUsage(id: string) {
+  async function pollUsage(id: string, force = false) {
     const current = usage.get(id);
     const revision = agents.get(id)?.agent.usageRevision;
-    if (stopped || !current || current.pending || !revision || deps.now() - current.attemptedAt < 60000) return;
+    if (stopped || !current || current.pending || !revision || (!force && deps.now() - current.attemptedAt < 60000)) return;
     current.pending = true;
     current.attemptedAt = deps.now();
     try {
@@ -314,7 +314,7 @@ export function createStatusStore(deps: Dependencies): StatusStore {
       else {
         popover = { timer: setInterval(() => { void refreshPopover(id, popover!); }, 5000), readers: 1, pending: false };
         popovers.set(id, popover);
-        resetUsage(id);
+        void pollUsage(id, true);
         void refreshPopover(id, popover);
       }
       let closed = false;

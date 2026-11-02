@@ -36,6 +36,30 @@ describe("status store", () => {
   }
   const flush = () => vi.advanceTimersByTimeAsync(1000);
 
+  it("keeps known usage visible when the dialog opens while refreshing it", async () => {
+    const deps = setup();
+    store.setAgents([agent("a")]);
+    await flush();
+    const before = store.getView("a")!;
+    expect(before.usageAccount).toBe("Primary");
+    const response = await deps.listUsageReports("a");
+    let resolve!: (value: typeof response) => void;
+    deps.listUsageReports.mockClear();
+    deps.listUsageReports.mockImplementation(() => new Promise((done) => { resolve = done; }));
+    const close = store.openPopover("a");
+    expect(deps.listUsageReports).toHaveBeenCalledTimes(1);
+    expect(store.getView("a")?.usageAccount).toBe("Primary");
+    await flush();
+    expect(store.getView("a")?.usageAccount).toBe("Primary");
+    const updated = { ...response, reports: response.reports.map((report) => ({
+      ...report, account: { label: "Updated account label" },
+    })) };
+    resolve(updated);
+    await flush();
+    expect(store.getView("a")?.usageAccount).toBe("Updated account label");
+    close();
+  });
+
   it("replaces the directory on reconnect snapshots", async () => {
     setup();
     store.setAgents([agent("old"), agent("kept")]);
@@ -178,10 +202,12 @@ describe("status store", () => {
     let resolve!: (value: typeof response) => void;
     deps.listUsageReports.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
     const close = store.openPopover("a");
-    expect(store.getView("a")?.usageAccount).toBeNull();
+    expect(store.getView("a")?.usageAccount).toBe("Primary");
     const fresh = { ...response, reports: response.reports.map((report) => ({ ...report, account: { label: "Fresh" } })) };
     deps.listUsageReports.mockResolvedValue(fresh);
-    store.setAgents([agent("a")], { refreshUsage: true }); await flush();
+    store.setAgents([agent("a")], { refreshUsage: true });
+    expect(store.getView("a")?.usageAccount).toBeNull();
+    await flush();
     resolve(response); await flush();
     expect(store.getView("a")?.usageAccount).toBe("Fresh");
     close();
