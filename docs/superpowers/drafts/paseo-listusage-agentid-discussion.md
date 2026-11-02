@@ -1,43 +1,67 @@
-# Expose agent-scoped usage reports to plugins
+# Let plugins read account usage for an agent and detect provider launch changes
 
-Status: recommendation accepted. API proposal: [Paseo #8503](https://github.com/getpaseo/paseo/pull/8503). Plugin migration: [ccstatusline #2](https://github.com/Laobei2012/paseo-ccstatusline/pull/2). Neither link implies that the API has shipped in a published release.
+Draft for GitHub Discussions, category: **Ideas**. Not posted.
 
-## Problem
+## What are you trying to do?
 
-ccstatusline shows context, 5-hour usage and weekly usage beside each agent. Routing plugins such as ZeroSub can run agents of the same provider under different accounts. The existing `paseo.providers.listUsage()` returns provider-shaped entries without agent attribution. Multiple entries can have the same provider ID. Its combined `displayName` is insufficient to associate a report with the current launch.
+I maintain [paseo-ccstatusline](https://github.com/Laobei2012/paseo-ccstatusline), a plugin displaying session information and account quotas. Its reports should follow the account used by an agent after another plugin switches accounts or resumes work.
 
-The daemon already accepts `agentId` in `usage.list_reports.request`, and its low-level client exposes `listUsageReports({ agentId })`. The public plugin SDK needs an agent-scoped method and a lifecycle signal to keep its results current.
+For example, ZeroSub moves a Claude conversation to another account in place. It reopens the session with `paseo agent reload`, and the agent ID stays the same, so the ID does not show the change. A Codex switch is different. ZeroSub continues the task in another agent, so the plugin only needs that agent's reports.
 
-## Options
+These are ZeroSub's documented [switching behaviors](https://github.com/kapybara-org/zerosub#claude-vs-chatgpt-when-switching-mid-conversation). Reports describe account quotas, not consumption attributable exclusively to an agent.
 
-| Option | Benefit | Cost |
-| --- | --- | --- |
-| Add `agentId` to `providers.listUsage()` | Small migration for existing callers | Must route to the newer request and convert native reports into the compatibility shape |
-| Add `agents.ref(id).listUsageReports()` | Agent scope is explicit; preserves report, source and account identity | Callers migrate to native `reports[]` |
+## How do you do it today?
 
-The second option is accepted. The server explicitly calls the old adapter `listLegacyUsage()` and marks it `COMPAT(providerUsageList): added in v0.1.98, remove after 2027-03-26`. It converts native reports into the old response. This is evidence for calling it a legacy compatibility API, not a guarantee of a removal release. See [usage source registry](https://github.com/getpaseo/paseo/blob/main/packages/server/src/server/plugins/usage-sources/index.ts).
+The high-level SDK exposes `providers.listUsage()` without an agent option. Selecting a host-wide entry by provider cannot reliably identify an agent's account when several accounts use that provider.
 
-## Proposed contract
+The daemon already accepts `agentId` in `usage.list_reports.request`. Plugins need supported high-level access to those native reports, plus a signal to discard reports when the provider launch changes under the same agent ID.
+
+## Where does Paseo get in the way?
+
+Agent-scoped queries solve selection across different IDs. They do not tell a plugin when to clear a cached result for the same ID. Polling leaves a window where the previous login's quota appears current, and delayed responses can arrive after reload.
+
+The existing app's [usage query handling](https://github.com/getpaseo/paseo/blob/bfac1329204f9aaeb6d47742885c51551d64f70b/packages/app/src/usage/queries.ts) already notes this: a resumed agent retains its ID but can use another login, so it drops reports when the details close.
+
+## What would a better workflow look like?
+
+A plugin requests native account reports for its agent, observes a launch revision, and discards reports when that revision changes. Routing stays in plugins such as ZeroSub; display and refresh scheduling stay in the consuming plugin.
+
+This preserves the account-level model. [#5685](https://github.com/getpaseo/paseo/pull/5685) removed agent-tied usage and the composer pill, explaining that “Usage is an account-level fact”. [#5975](https://github.com/getpaseo/paseo/pull/5975) subsequently added account reports associated with an agent's launch to its context window details. This proposal exposes that relationship to plugins. It does not ask for a pill in core.
+
+## Possible API and contract
+
+[PR #8503](https://github.com/getpaseo/paseo/pull/8503) is a reference implementation:
 
 ```ts
-paseo.agents.ref(agentId).listUsageReports({ forceRefresh: true })
+const result = await paseo.agents.ref(agentId).listUsageReports();
 // { requestId, reports: UsageReportEntry[], usageRevision: string | null }
 ```
 
-- Agent snapshots expose the same opaque `usageRevision`. It identifies launch attribution without exposing the session environment or credentials.
-- The daemon advertises `agentUsageRevision`. The SDK rejects unsupported hosts instead of returning host-wide reports.
-- Reload/resume that replaces a provider launch changes the revision even when the agent ID and public conversation ID remain the same. No live usage session has a null revision and no attributed reports.
-- A request spanning an attribution change fails; the client discards partial streamed results.
-- Reports describe account quotas associated with the launch, not tokens consumed by the agent alone. Zero, multiple and unavailable reports remain possible.
+`usageRevision` identifies the provider launch and model. It also changes on a same-account reload or a model switch. A change means that the plugin must discard its reports and fetch again. It does not mean that the account changed, and the value does not identify an account.
 
-## Plugin behavior and ZeroSub
+- Agent snapshots expose the same opaque revision. No live usage session means a null revision and empty reports; reading a stored agent does not reopen it. Unknown IDs reject.
+- Native reports retain source and account identity. Zero, multiple, and unavailable reports are possible. There is no host-wide fallback.
+- Requests spanning a revision change reject, including same-account reloads and model switches. The current PR only returns an error string. A stable machine-readable error code remains an outstanding contract improvement, so plugins can distinguish stale requests without matching prose.
+- The host's **Check usage** switch remains authoritative. When off, requests reject before discovery or vendor calls, as documented in the [plugin guide](https://github.com/getpaseo/paseo/blob/bfac1329204f9aaeb6d47742885c51551d64f70b/docs/plugins.md). Plugins should respect that setting rather than repeatedly retrying or querying vendors themselves.
+- Ordinary reads use the daemon's five-minute cache. `forceRefresh` bypasses it and should be reserved for an explicit refresh, not routine polling.
+- `features.agentUsageRevision` advertises support. Existing provider-wide APIs stay unchanged. Credential edits within an unchanged launch are not detected.
 
-The plugin caches usage per host and agent. It clears old attribution and requests again after revision changes, turn starts, reconnect snapshots and panel opening; it also polls every 60 seconds. Each invalidation replaces the pending-request identity so earlier responses cannot restore an old account. A response whose revision differs from the observed agent snapshot is discarded. Missing support, failed requests or ambiguous reports hide account usage without disabling other status widgets.
+Extending `providers.listUsage({ agentId })` is an alternative. I favor the agent method because scope is explicit and native report identity is preserved. Naming and placement remain open for discussion.
 
-Source inspection of ZeroSub shows two relevant paths: an established Codex task continues in a new or reused account-bound agent, or an eligible same-agent switch reloads the provider session with a selected `CODEX_HOME`. These give either a different agent ID or a new launch revision. A deferred switch must retain the running account until it completes. Merely replacing credentials inside a continuing provider launch is outside this contract.
+## Evidence and limits
 
-An isolated local integration check with a real Codex app-server, the real Codex usage source and two accounts passed initial attribution, same-agent reload, revision delivery, stale-response rejection, separate continuation attribution and reused continuation refresh. This exercised the real plugin store with SDK responses. The routing hook was a test fixture, not ZeroSub's UI or handoff prompt; browser rendering was not exercised. The same-agent test copied rollouts between temporary account homes, which ZeroSub does not do for Codex. This verifies the API/store behavior without claiming an end-to-end ZeroSub UI switch.
+The completed tests demonstrate distinct behaviors:
 
-A separate isolated test installed unmodified ZeroSub 1.5.0 (commit `4bcf81cf64209beeeafa0a3ad5c9cc898b1fac87`) alongside ccstatusline and exercised ZeroSub's account-switch RPC. Switching A to B created a continuation whose usage report and plugin view matched B while the original retained A. Switching back reused the original account-bound agent with the correct attribution. Both plugins were running, and temporary credential copies were deleted after the test. This covers the actual ZeroSub routing and handoff flow through RPC; browser rendering and clicking its UI remain untested.
+1. A macOS Codex fixture tested same-agent reloads, revision delivery, and stale-response rejection with two accounts. It used a test routing hook and copied rollouts between temporary account homes. ZeroSub does not switch established Codex conversations this way. This verifies API/store behavior, not ZeroSub's in-place switch.
+2. A separate test installed unmodified ZeroSub 1.5.0 and called its actual account-switch RPC with Codex. A→B created a continuation and B→A reused the original agent. Reports and ccstatusline state followed each account. This tests different-agent selection, not the same-ID case motivating the revision. It did not click the ZeroSub UI.
+3. Regression tests cover lifecycle/finish notification preservation during reload and empty reports for stored agents without reopening them.
 
-The plugin keeps a small optional-method type bridge against the published 0.14.0 SDK until the new API is released. Older hosts/apps hide account usage and never fall back to the default host account.
+**ZeroSub's Claude same-ID account switch has not been tested with this API.** That workflow is supported by source inspection, not live verification. A two-account Claude run should verify the unchanged agent ID, revision transition, new account report, and rejection of a delayed pre-switch response before claiming end-to-end coverage. Other platforms and providers remain unverified. PR #8503 records the existing test details.
+
+## Related needs and questions
+
+[#3589](https://github.com/getpaseo/paseo/issues/3589) reports missing usage for non-default account configuration directories. [Discussion #3463](https://github.com/getpaseo/paseo/discussions/3463) requests usage for several custom Codex accounts. Both demonstrate multi-account use, but request first-party display, not a plugin API.
+
+ccstatusline supplies one concrete plugin use case. Feedback from the ZeroSub maintainer would help establish another plugin author's need; no endorsement is claimed here.
+
+Would this extension point help other plugin authors? Is a launch revision on snapshots the right invalidation mechanism, or would a dedicated event fit better? What stable error contract should distinguish a request invalidated by a launch change?
